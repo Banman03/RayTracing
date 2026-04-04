@@ -19,3 +19,22 @@
 - $m$, $k$ (number of square pixels in the vertical and horizontal direction)
 - $i$, $j$ (indexing for square number; i indexes horizontally, j indexes vertically)
 - $\vec{v}$ (determines the up/down direction. typically [0, 1, 0])
+
+## Process 
+- For each pixel in the scene, we want to:
+    ### Precalculations
+        - Determine the normalized $\vec{b}$, $\vec{t}$, $\vec{v}$ so that we can determine the coordinates of $P_{i, j}$ relative to $P_{1, j}$. This is essential so that we can know our vectors which are parallel to the viewport.
+        - $\vec{t} = T - E$
+        - $vec{b} = \vec{t} \times \vec{v}$
+        - $\vec{t_n} = norm(\vec{t})$ (same for $\vec{b}$).
+        - $\vec{v_n} = \vec{t_n} \times \vec{b_n}$
+        - $g_x = d*\tan{\theta}/2$ assume $d = 1$.
+        - $g_y = g_x * \frac{m - 1}{k - 1}$.
+        - We then need to calculate the vectors denoting shift in pixel position along the v or b axis:
+        - $\vec{q_x} = \frac{2g_x}{k - 1} \vec{b_n}$.
+        - $\vec{q_y} = \frac{2g_y}{m - 1} \vec{v_n}$.
+        - $\vec{p_{1, m}} = \vec{t_n}d - g_x\vec{b_n} - g_y\vec{v_n}$
+
+    - Determine $r_{, j} = P_{i, j} - E$. ($R$ is the unnormalized version):
+    - $\vec{p_{i, j}} = \vec{p_{1, m}} + \vec{q_x}(i - 1) + \vec{q_y}(j - 1)$
+    - $\vec{r_{i, j}} = \frac{\vec{p_{i, j}}}{\norm{r_{i, j}}}$
