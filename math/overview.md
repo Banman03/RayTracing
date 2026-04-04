@@ -25,7 +25,7 @@
     ### Precalculations
     - Determine the normalized $\vec{b}$, $\vec{t}$, $\vec{v}$ so that we can determine the coordinates of $P_{i, j}$ relative to $P_{1, j}$. This is essential so that we can know our vectors which are parallel to the viewport.
     - $\vec{t} = T - E$
-    - $vec{b} = \vec{t} \times \vec{v}$
+    - $\vec{b} = \vec{t} \times \vec{v}$
     - $\vec{t_n} = norm(\vec{t})$ (same for $\vec{b}$).
     - $\vec{v_n} = \vec{t_n} \times \vec{b_n}$
     - $g_x = d*\tan{\theta}/2$ assume $d = 1$.
