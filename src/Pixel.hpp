@@ -6,7 +6,7 @@ namespace Pixel {
         double r, g, b;
 
         // Basic color operations
-        Color operator+(const Color& other) const { return {r + other.r, g + other.g, g + other.b}; }
+        Color operator+(const Color& other) const { return {r + other.r, g + other.g, b + other.b}; }
         Color operator*(double scalar) const { return {r * scalar, g * scalar, b * scalar}; }
     };
 
