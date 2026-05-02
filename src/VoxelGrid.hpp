@@ -21,11 +21,11 @@ class VoxelGrid {
     int _nx, _ny, _nz;
     double _vsx, _vsy, _vsz;
 
-    std::vector<const Sphere*> _spheres;       // non-owning; Scene owns the objects
-    std::vector<std::vector<int>> _cells;       // cell -> sphere indices
+    std::vector<const Sphere*> _spheres;
+    std::vector<std::vector<int>> _cells;
 
     mutable int _nextRayID = 1;
-    mutable std::vector<int> _lastRayID;        // per-sphere, last rayID that tested it
+    mutable std::vector<int> _lastRayID;
 
     int cellIdx(int x, int y, int z) const {
         return z * (_nx * _ny) + y * _nx + x;
@@ -64,7 +64,6 @@ public:
     std::optional<HitRecord> traverse(const Ray::Ray& ray) const {
         int rayID = _nextRayID++;
 
-        // --- Initialization: clip ray to grid AABB (slab method) ---
         double tEntry = 0.0;
         double tExit  = std::numeric_limits<double>::max();
 
@@ -83,13 +82,11 @@ public:
         if (!slab(ray.origin.y, ray.direction.y, _min.y, _max.y)) return std::nullopt;
         if (!slab(ray.origin.z, ray.direction.z, _min.z, _max.z)) return std::nullopt;
 
-        // Starting voxel from the grid entry point
         Ray::Vec3 entry = ray.point_at(tEntry);
         int X = std::clamp((int)std::floor((entry.x - _min.x) / _vsx), 0, _nx - 1);
         int Y = std::clamp((int)std::floor((entry.y - _min.y) / _vsy), 0, _ny - 1);
         int Z = std::clamp((int)std::floor((entry.z - _min.z) / _vsz), 0, _nz - 1);
 
-        // Step direction per axis (+1 or -1)
         int stepX = (ray.direction.x >= 0) ? 1 : -1;
         int stepY = (ray.direction.y >= 0) ? 1 : -1;
         int stepZ = (ray.direction.z >= 0) ? 1 : -1;
@@ -115,7 +112,6 @@ public:
         double tDeltaY = (std::abs(ray.direction.y) < 1e-10) ? std::numeric_limits<double>::max() : _vsy / std::abs(ray.direction.y);
         double tDeltaZ = (std::abs(ray.direction.z) < 1e-10) ? std::numeric_limits<double>::max() : _vsz / std::abs(ray.direction.z);
 
-        // --- Traversal ---
         std::optional<HitRecord> closest;
         double closestT = std::numeric_limits<double>::max();
 
@@ -133,10 +129,8 @@ public:
             }
         };
 
-        // Check the starting voxel before entering the loop.
         testCell(X, Y, Z);
 
-        // Incremental traversal (Amanatides & Woo §"The New Traversal Algorithm").
         while (true) {
             // tCurExit is the t at which the ray exits the current voxel.
             // If the closest hit lies within the current voxel we are done.

@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <stdexcept>
 
+enum class Event { None, Quit, PrevScene, NextScene };
+
 class Display {
     SDL_Window*   _window   = nullptr;
     SDL_Renderer* _renderer = nullptr;
@@ -40,7 +42,6 @@ public:
         SDL_Quit();
     }
 
-    // Write one pixel into the CPU-side buffer (0xFFRRGGBB).
     void setPixel(int col, int row, uint8_t r, uint8_t g, uint8_t b) {
         _pixels[row * _w + col] =
             (uint32_t(0xFF) << 24) |
@@ -49,7 +50,10 @@ public:
              uint32_t(b);
     }
 
-    // Push the pixel buffer to the window — call once per row for live preview.
+    void clear() {
+        std::fill(_pixels.begin(), _pixels.end(), 0u);
+    }
+
     void present() {
         SDL_UpdateTexture(_texture, nullptr, _pixels.data(), _w * sizeof(uint32_t));
         SDL_RenderClear(_renderer);
@@ -57,19 +61,34 @@ public:
         SDL_RenderPresent(_renderer);
     }
 
-    // Returns true if the user closed the window.
-    bool pollQuit() {
-        SDL_Event e;
-        while (SDL_PollEvent(&e))
-            if (e.type == SDL_QUIT) return true;
-        return false;
+    void setTitle(const std::string& title) {
+        SDL_SetWindowTitle(_window, title.c_str());
     }
 
-    // Block until the window is closed (call after rendering is done).
-    void waitUntilClosed() {
+    // Drain the event queue; return the first significant event found.
+    Event pollEvent() {
         SDL_Event e;
-        while (SDL_WaitEvent(&e))
-            if (e.type == SDL_QUIT) break;
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) return Event::Quit;
+            if (e.type == SDL_KEYDOWN) {
+                if (e.key.keysym.sym == SDLK_LEFT)  return Event::PrevScene;
+                if (e.key.keysym.sym == SDLK_RIGHT) return Event::NextScene;
+            }
+        }
+        return Event::None;
+    }
+
+    // Block until a significant event arrives (used while idle after a full render).
+    Event waitEvent() {
+        SDL_Event e;
+        while (SDL_WaitEvent(&e)) {
+            if (e.type == SDL_QUIT) return Event::Quit;
+            if (e.type == SDL_KEYDOWN) {
+                if (e.key.keysym.sym == SDLK_LEFT)  return Event::PrevScene;
+                if (e.key.keysym.sym == SDLK_RIGHT) return Event::NextScene;
+            }
+        }
+        return Event::Quit;
     }
 };
 
