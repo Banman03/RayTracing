@@ -12,7 +12,7 @@ namespace Scenes {
 
         constexpr int N = 10;
         constexpr double ringRadius = 3.5;
-        constexpr double cx = 0, cz = 5.5; // centre of ring in XZ
+        constexpr double cx = 0, cz = 5.5;
 
         for (int i = 0; i < N; ++i) {
             double angle = 2.0 * M_PI * i / N;

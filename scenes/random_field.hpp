@@ -6,7 +6,6 @@
 #include <cstdint>
 
 // 5x5 grid of spheres sitting on a ground plane, with deterministic
-// random variation in size and position (LCG seeded at 42).
 namespace Scenes {
     inline SceneConfig randomField(int W, int H) {
         Scene::Scene scene(W, H, {-7,-4,-1}, {7,3,10}, 28,14,22);
@@ -22,7 +21,7 @@ namespace Scenes {
                 double r  = 0.25 + next() * 0.35;
                 double x  = (i - 2) * 2.0 + (next() - 0.5) * 0.5;
                 double z  = j * 1.8 + 1.5  + (next() - 0.5) * 0.5;
-                double y  = -1.0 + r;  // sitting on the ground surface
+                double y  = -1.0 + r;
                 scene.addSphere(
                     std::make_unique<RayTracing::Sphere>(Ray::Vec3{x, y, z}, r));
             }

@@ -93,7 +93,7 @@ int main(int argc, char* argv[]) {
     }
 
     constexpr int W = 800;
-    constexpr int H = 450;
+    constexpr int H = 900;
     constexpr int NUM_LIGHTS = 20;
     constexpr double lightSphereRadius = 0.35;
 
