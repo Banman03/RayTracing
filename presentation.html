@@ -1,0 +1,1196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ray Tracing &amp; Monte Carlo Path Tracing</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/dist/theme/moon.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/plugin/highlight/monokai.css">
+
+<style>
+  .reveal { font-size: 32px; }
+  .reveal h1 { font-size: 1.6em; color: #8ecae6; }
+  .reveal h2 { font-size: 1.25em; color: #8ecae6; }
+  .reveal h3 { font-size: 1.0em; color: #a8dadc; }
+  .reveal p, .reveal li { font-size: 0.82em; line-height: 1.5; }
+  .reveal pre { width: 100%; font-size: 0.62em; }
+  .reveal pre code { max-height: 380px; }
+  .reveal table { font-size: 0.68em; border-collapse: collapse; width: 100%; }
+  .reveal table th { background: #1d3557; color: #a8dadc; padding: 6px 10px; }
+  .reveal table td { padding: 5px 10px; border-bottom: 1px solid #333; }
+  .reveal table tr:nth-child(even) td { background: rgba(255,255,255,0.04); }
+
+  .pros-cons { display: flex; gap: 2em; margin-top: 0.4em; }
+  .pros, .cons { flex: 1; }
+  .pros h4 { color: #57cc99; margin: 0 0 0.3em; font-size: 0.8em; }
+  .cons h4 { color: #e63946; margin: 0 0 0.3em; font-size: 0.8em; }
+  .pros ul, .cons ul { margin: 0; padding-left: 1.2em; font-size: 0.72em; }
+  .pros li, .cons li { font-size: 1em; margin-bottom: 0.25em; }
+
+  .part-title { font-size: 1.8em !important; color: #ffffff !important; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+  .part-sub   { font-size: 0.9em !important; color: rgba(255,255,255,0.75) !important; margin-top: 0.5em; }
+
+  .highlight-box {
+    background: rgba(142, 202, 230, 0.12);
+    border-left: 4px solid #8ecae6;
+    padding: 0.5em 1em;
+    margin: 0.5em 0;
+    font-size: 0.78em;
+  }
+  .eq-label { color: #a8dadc; font-size: 0.7em; margin-bottom: 0.2em; }
+  .small { font-size: 0.72em !important; }
+  .smaller { font-size: 0.65em !important; }
+  .cite { color: #888; font-size: 0.6em; font-style: italic; }
+
+  .two-col { display: flex; gap: 2em; align-items: flex-start; }
+  .two-col > div { flex: 1; }
+
+  .tag {
+    display: inline-block;
+    background: #1d3557;
+    border-radius: 4px;
+    padding: 1px 8px;
+    font-size: 0.65em;
+    color: #a8dadc;
+    margin: 0 2px;
+    font-family: monospace;
+  }
+</style>
+</head>
+
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 1 — TITLE
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h1 style="font-size:1.5em; margin-bottom:0.3em;">Ray Tracing &amp;<br>Monte Carlo Path Tracing</h1>
+  <p style="color:#a8dadc; font-size:0.9em; margin-bottom:1em;">From Lambert Diffuse to Full Global Illumination</p>
+  <hr style="border-color:#1d3557; margin: 0.8em auto; width:60%;">
+  <p class="small" style="color:#888;">Computational Optics — 2026</p>
+  <div style="margin-top:1.5em; font-size:0.7em; color:#666;">
+    <span class="tag">lambert</span>
+    <span class="tag">blinn-phong</span>
+    <span class="tag">soft shadows</span>
+    <span class="tag">whitted RT</span>
+    <span class="tag">path tracing</span>
+    <span class="tag">NEE</span>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 2 — MOTIVATION
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Motivation: What Must a Renderer Simulate?</h2>
+  <ul>
+    <li><strong>Direct illumination</strong> — how a surface responds to a light source</li>
+    <li><strong>Shadows</strong> — hard (point light) or soft (area light)</li>
+    <li><strong>Specular reflections</strong> — highlights, mirror inter-reflections</li>
+    <li><strong>Indirect illumination</strong> — light bouncing off diffuse surfaces</li>
+    <li><strong>Caustics</strong> — focused light through/off curved surfaces</li>
+  </ul>
+  <div class="highlight-box" style="margin-top:0.8em; text-align:center;">
+    Appel (1968) &nbsp;→&nbsp; Whitted (1980) &nbsp;→&nbsp; Cook et al. (1984) &nbsp;→&nbsp; Kajiya (1986) &nbsp;→&nbsp; RTX (2018)
+  </div>
+  <p class="small" style="margin-top:0.6em;">Each generation adds one more class of light paths. The unifying framework is the <em>rendering equation</em>.</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 3 — RENDERING EQUATION
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>The Rendering Equation &nbsp;<span class="cite">Kajiya, 1986</span></h2>
+  <p class="eq-label">Reflected radiance at surface point \(\vec{x}\) in direction \(\vec{\omega}\):</p>
+  \[
+    L_o(\vec{x}, \vec{\omega}) = L_e(\vec{x}, \vec{\omega})
+      + \int_\Omega f_r(\vec{x},\,\vec{\omega}_i \to \vec{\omega})\;
+        L_i(\vec{x}, \vec{\omega}_i)\;\cos\theta_i\; d\omega_i
+  \]
+  <ul class="small" style="margin-top:0.6em;">
+    <li>\(L_e\) — emitted radiance (light sources)</li>
+    <li>\(f_r\) — BRDF: probability that incoming \(\omega_i\) scatters into \(\omega\)</li>
+    <li>\(L_i(\vec{x},\vec{\omega}_i) = L_o(\vec{x}', -\vec{\omega}_i)\) — radiance arriving from direction \(\omega_i\)</li>
+    <li>\(\cos\theta_i\) — Lambert foreshortening</li>
+  </ul>
+  <div class="highlight-box" style="margin-top:0.7em;">
+    <strong>Operator form:</strong> \(L = L_e + K \circ L\) &nbsp;→&nbsp;
+    Neumann series: \(L = \displaystyle\sum_{n=0}^{\infty} K^n \circ L_e\)<br>
+    <span class="smaller">\(K^n\) = contribution from all light paths of exactly \(n\) bounces</span>
+  </div>
+  <p class="small" style="color:#a8dadc; margin-top:0.5em;">Every algorithm in this talk is an approximation or estimator of this equation.</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 4 — RAY FUNDAMENTALS
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Ray Fundamentals</h2>
+  <div class="two-col">
+    <div>
+      <p class="eq-label">Ray parameterization:</p>
+      \[ \vec{P}(t) = \vec{o} + t\,\vec{d}, \quad \|\vec{d}\| = 1 \]
+      <p class="eq-label" style="margin-top:0.6em;">Ray–sphere intersection:</p>
+      \[ a t^2 + b t + c = 0 \]
+      <p class="small">\(a = \vec{d}{\cdot}\vec{d},\; b = 2(\vec{o}-\vec{c}){\cdot}\vec{d},\; c = |\vec{o}-\vec{c}|^2 - r^2\)</p>
+      <p class="small">Discriminant \(\Delta = b^2 - 4ac\); reject if \(\Delta < 0\)</p>
+    </div>
+    <div>
+      <p class="eq-label">Hit record:</p>
+      <ul class="small">
+        <li>\(t_\text{hit}\) — ray parameter at intersection</li>
+        <li>\(\vec{P}(t_\text{hit})\) — world-space point</li>
+        <li>\(\hat{n} = (\vec{P} - \vec{c})\,/\,r\) — outward normal</li>
+      </ul>
+      <p class="eq-label" style="margin-top:0.6em;">Self-intersection avoidance:</p>
+      <p class="small">Offset shadow/reflection ray origin by \(10^{-4}\) along \(\hat{n}\) to avoid re-hitting the surface just left.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 5 — VOXEL TRAVERSAL
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Spatial Acceleration: Amanatides &amp; Woo &nbsp;<span class="cite">1987</span></h2>
+  <p class="small">Naïve intersection: \(O(n)\) per ray. Uniform voxel grid + DDA traversal: \(O(\sqrt[3]{n})\) average.</p>
+  <div class="two-col" style="margin-top:0.5em;">
+    <div>
+      <p class="eq-label">Initialization (slab test → entry voxel):</p>
+      <pre><code class="language-cpp">tMax[X] = (boundary - o.x) / d.x;
+tDelta[X] = voxelSize / |d.x|;
+// repeat for Y, Z</code></pre>
+      <p class="eq-label" style="margin-top:0.5em;">Traversal loop (2 cmp + 1 add per step):</p>
+      <pre><code class="language-cpp">if (tMax.x &lt; tMax.y &amp;&amp; tMax.x &lt; tMax.z) {
+    X += step.x;  tMax.x += tDelta.x;
+} else if (tMax.y &lt; tMax.z) {
+    Y += step.y;  tMax.y += tDelta.y;
+} else {
+    Z += step.z;  tMax.z += tDelta.z;
+}</code></pre>
+    </div>
+    <div>
+      <p class="eq-label">Deduplication:</p>
+      <p class="small">Sphere spanning multiple voxels → assign unique <code>rayID</code>; skip if already tested this ray.</p>
+      <p class="eq-label" style="margin-top:0.5em;">Early stop:</p>
+      <p class="small">If \(t_\text{hit} \leq \min(t_{\max X}, t_{\max Y}, t_{\max Z})\), hit is in current voxel — stop traversal.</p>
+      <div class="pros-cons" style="margin-top:0.6em;">
+        <div class="pros"><h4>Pros</h4><ul><li>Simple, cache-friendly</li><li>GPU-parallelisable</li><li>O(1) per step</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Poor for non-uniform scenes</li><li>No empty-space skipping</li><li>BVH dominates production</li></ul></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PART 2 SEPARATOR
+     ═══════════════════════════════════════════════════════════ -->
+<section data-background-color="#0b2a13">
+  <p class="part-title">Part 2</p>
+  <p class="part-title">Shading Models</p>
+  <p class="part-sub">Lambert · Blinn-Phong · Soft Shadows</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 6 — WHAT IS SHADING
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Shading vs. Lighting</h2>
+  <ul>
+    <li><strong>Shading</strong> — evaluating the BRDF at a hit point; how a surface reflects <em>given</em> incoming light</li>
+    <li><strong>Lighting</strong> — determining how much and from where light reaches the surface (shadows, inter-reflection)</li>
+  </ul>
+  <div class="highlight-box" style="margin-top:0.7em;">
+    Our shading models (Lambert, Blinn-Phong) are <strong>local</strong>: they query a single point light via one shadow ray.
+    Global effects require more — recursive tracing (Whitted) or Monte Carlo integration (path tracing).
+  </div>
+  <table style="margin-top:0.8em;">
+    <thead><tr><th>Model</th><th>Direct diffuse</th><th>Specular</th><th>Soft shadows</th><th>Interreflection</th></tr></thead>
+    <tbody>
+      <tr><td>Lambert</td><td>✓</td><td>✗</td><td>✗</td><td>✗</td></tr>
+      <tr><td>Blinn-Phong</td><td>✓</td><td>highlight</td><td>✗</td><td>✗</td></tr>
+      <tr><td>Soft Shadows</td><td>✓</td><td>✗</td><td>✓</td><td>✗</td></tr>
+      <tr><td>Whitted</td><td>✓</td><td>recursive</td><td>✗</td><td>specular only</td></tr>
+      <tr><td>Path Tracing</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 7 — LAMBERT
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Lambertian Diffuse &nbsp;<span class="cite">Lambert, 1760</span></h2>
+  <p class="small"><strong>Physical premise:</strong> perfectly matte surface — incident energy scattered equally in all directions over the hemisphere.</p>
+  <div class="two-col" style="margin-top:0.5em;">
+    <div>
+      <p class="eq-label">BRDF (constant):</p>
+      \[ f_r = \frac{\rho}{\pi} \]
+      <p class="eq-label" style="margin-top:0.5em;">Irradiance from Lambert's law:</p>
+      \[ E = \Phi_L \cos\theta_i = \Phi_L\,(\hat{N}\cdot\hat{L}) \]
+      <p class="eq-label" style="margin-top:0.5em;">Rendered intensity:</p>
+      \[ I = k_a + (1 - k_a)\max(0,\,\hat{N}\cdot\hat{L})\,v_\text{shadow} \]
+      <p class="small">\(k_a = 0.12\) (ambient), \(v_\text{shadow} \in \{0,1\}\)</p>
+    </div>
+    <div>
+      <p class="eq-label">Shadow test:</p>
+      <pre><code class="language-cpp">Vec3 shadowOrig = hit.point
+                + hit.normal * 1e-4;
+Ray  shadowRay(shadowOrig, L);
+bool blocked = scene.trace(shadowRay)
+               .has_value();</code></pre>
+      <p class="eq-label" style="margin-top:0.5em;">Normal-tinted color (our implementation):</p>
+      <pre><code class="language-cpp">// surface orientation proxy
+r = intensity * (0.5 + 0.5 * n.x);
+g = intensity * (0.3 + 0.5 * n.y);
+b = intensity * (0.4 + 0.3 * n.z);</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 8 — LAMBERT ANALYSIS
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Lambert: Analysis</h2>
+  <p class="small">Baseline algorithm. Every more complex shading model reduces to Lambert when all fancy terms go to zero.</p>
+  <div class="pros-cons" style="margin-top:0.8em;">
+    <div class="pros">
+      <h4>Pros</h4>
+      <ul>
+        <li>\(O(1)\) cost per pixel</li>
+        <li>Physically grounded BRDF</li>
+        <li>Zero tuning parameters</li>
+        <li>Energy-conserving (if \(\rho \leq 1\))</li>
+        <li>Good baseline for visual comparison</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>Cons</h4>
+      <ul>
+        <li>No specular highlights</li>
+        <li>Hard binary shadows — unphysical</li>
+        <li>No view-dependent effects</li>
+        <li>No inter-reflection</li>
+        <li>All surfaces look identically matte</li>
+      </ul>
+    </div>
+  </div>
+  <div class="highlight-box" style="margin-top:0.8em;">
+    <strong>State of the art Lambert:</strong> still the dominant diffuse model in production. PBR pipelines (e.g., Unreal, Unity) use it as the diffuse lobe in the split-sum approximation for real-time IBL.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 9 — BLINN-PHONG: MICROFACET THEORY
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Blinn-Phong: Microfacet Motivation &nbsp;<span class="cite">Blinn, 1977</span></h2>
+  <p class="small">Torrance-Sparrow model: surface = statistical distribution of tiny perfect mirrors (microfacets). Only facets with normal \(\hat{H}\) contribute to reflection toward \(\hat{V}\).</p>
+  \[ S = \frac{D \cdot G \cdot F}{(\hat{N}\cdot\hat{E})} \]
+  <div class="two-col small" style="margin-top:0.4em;">
+    <div>
+      <p class="eq-label">\(D\) — Microfacet distribution (Gaussian):</p>
+      \[ D = e^{-c^2 \alpha^2}, \quad \alpha = \cos^{-1}(\hat{N}\cdot\hat{H}) \]
+      <p class="eq-label" style="margin-top:0.4em;">\(G\) — Geometric attenuation (V-groove):</p>
+      \[ G = \min\!\left(1,\;\frac{2(\hat{N}{\cdot}\hat{H})(\hat{N}{\cdot}\hat{E})}{\hat{E}{\cdot}\hat{H}},\;\frac{2(\hat{N}{\cdot}\hat{H})(\hat{N}{\cdot}\hat{L})}{\hat{L}{\cdot}\hat{H}}\right) \]
+    </div>
+    <div>
+      <p class="eq-label">\(F\) — Fresnel reflectance:</p>
+      \[ F = \frac{1}{2}\!\left[\frac{\sin^2(\phi-\theta)}{\sin^2(\phi+\theta)} + \frac{\tan^2(\phi-\theta)}{\tan^2(\phi+\theta)}\right] \]
+      <p class="small" style="margin-top:0.3em;">\(\phi\) = angle of incidence, \(\theta = \sin^{-1}(\sin\phi / n)\)</p>
+      <p class="eq-label" style="margin-top:0.5em;">Blinn's simplification:</p>
+      <p class="small">Replace \(D\) with \((\hat{N}\cdot\hat{H})^n\); drop \(G\) and \(F\) for efficiency → <strong>Blinn-Phong</strong></p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 10 — BLINN-PHONG MODEL
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Blinn-Phong: The Model</h2>
+  <div class="two-col">
+    <div>
+      <p class="eq-label">Half-vector:</p>
+      \[ \hat{H} = \frac{\hat{L} + \hat{V}}{\|\hat{L} + \hat{V}\|} \]
+      <p class="small">\(\hat{V} = -\vec{d}_\text{ray}\) (toward camera)</p>
+      <p class="eq-label" style="margin-top:0.5em;">Specular highlight:</p>
+      \[ k_s = \max(0,\,\hat{N}\cdot\hat{H})^n, \quad n = 64 \]
+      <p class="eq-label" style="margin-top:0.5em;">Full model (\(\sigma = 0.6\)):</p>
+      \[ I = \underbrace{k_a + (1-k_a)\max(0,\hat{N}{\cdot}\hat{L})}_{\text{Lambert term}} + \sigma k_s \]
+    </div>
+    <div>
+      <pre><code class="language-cpp">// V points toward camera
+Vec3 V = ray.direction * -1.0;
+Vec3 H = (L + V).normalized();
+double NdotH = max(0.0, N.dot(H));
+double spec  = pow(NdotH, 64.0);
+
+// final color per channel
+r = diffuseIntensity*(0.5+0.5*n.x) + spec*0.6;
+g = diffuseIntensity*(0.3+0.5*n.y) + spec*0.6;
+b = diffuseIntensity*(0.4+0.3*n.z) + spec*0.6;</code></pre>
+      <p class="small" style="margin-top:0.5em;"><strong>Why half-vector over reflection vector?</strong><br>
+      \(\vec{R} = 2(\hat{N}{\cdot}\hat{L})\hat{N} - \hat{L}\) requires a subtract + dot per pixel.<br>
+      \(\hat{H}\) is a normalize; equivalent for directional lights and cheaper overall.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 11 — BLINN-PHONG ANALYSIS
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Blinn-Phong: Analysis</h2>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>Pros</h4>
+      <ul>
+        <li>\(O(1)\) per pixel</li>
+        <li>View-dependent highlight</li>
+        <li>Perceptually convincing for plastics, metals</li>
+        <li>Hardware-accelerated in rasterization pipelines</li>
+        <li>Single tuning parameter (\(n\))</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>Cons</h4>
+      <ul>
+        <li>Not energy-conserving: \(\int f_r \cos\theta\,d\omega\) can exceed 1</li>
+        <li>No Fresnel: reflectivity constant at all angles</li>
+        <li>Shininess \(n\) is empirical, not physically meaningful</li>
+        <li>Hard shadows; no inter-reflection</li>
+        <li>Replaced by GGX in modern PBR pipelines</li>
+      </ul>
+    </div>
+  </div>
+  <div class="highlight-box" style="margin-top:0.7em;">
+    <strong>State of the art:</strong> Blinn-Phong was the GPU standard through the 2000s. Modern PBR (Physically Based Rendering) replaces it with the <strong>GGX microfacet BRDF</strong> (Walter et al., 2007) which correctly models the Fresnel term and energy conservation.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 12 — SOFT SHADOWS: MOTIVATION
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Soft Shadows: Distributed Ray Tracing &nbsp;<span class="cite">Cook, Porter, Carpenter, 1984</span></h2>
+  <p class="small"><strong>Problem:</strong> a point light casts a perfectly sharp shadow boundary — physically impossible for any real light source with nonzero area.</p>
+  <div class="two-col" style="margin-top:0.5em;">
+    <div>
+      <p class="small"><strong>Physical model:</strong><br>
+      An area light of radius \(r\) at distance \(d\) subtends solid angle \(\approx \pi r^2 / d^2\). Points in the <em>penumbra</em> see a partial fraction of the light disk.</p>
+      <p class="small" style="margin-top:0.5em;">Cook's insight: <em>distribute</em> shadow rays stochastically over the light's solid angle. The fraction of unblocked rays estimates the partial visibility.</p>
+      <p class="small" style="margin-top:0.5em;">Penumbra width \(\propto r / d\). Same framework generalises to depth of field, motion blur, and glossy reflections.</p>
+    </div>
+    <div>
+      <div class="highlight-box">
+        Cook et al. (1984) unified stochastic sampling under a single framework: the shading integral
+        \[I = \iint L(\phi_i,\theta_i)\,R(\phi_i,\theta_i,\phi_r,\theta_r)\,d\phi_i\,d\theta_i\]
+        is estimated by distributing samples across all dimensions simultaneously.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 13 — SOFT SHADOWS: MATH
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Soft Shadows: Area Light Sampling Math</h2>
+  <div class="two-col">
+    <div>
+      <p class="eq-label">Uniform point on unit sphere (Marsaglia 1972):</p>
+      <p class="small">Reject \((x_1, x_2) \in [-1,1)^2\) if \(s = x_1^2 + x_2^2 \geq 1\):</p>
+      \[ f = 2\sqrt{1-s}, \quad \vec{u} = (x_1 f,\; x_2 f,\; 1 - 2s) \]
+      <p class="eq-label" style="margin-top:0.5em;">Shadow factor (continuous penumbra):</p>
+      \[ \text{sf} = \frac{\#\{\text{unblocked rays}\}}{N}, \quad N = 16 \]
+      <p class="eq-label" style="margin-top:0.5em;">Final intensity:</p>
+      \[ I = k_a + (1-k_a)\,(\hat{N}{\cdot}\hat{L}_c)\cdot\text{sf} \]
+    </div>
+    <div>
+      <p class="eq-label">Per-pixel LCG seed (stable noise):</p>
+      \[ \text{seed} = \lfloor(d_x{+}2)\cdot c_1\rfloor \oplus \lfloor(d_y{+}2)\cdot c_2\rfloor \oplus \lfloor(d_z{+}2)\cdot c_3\rfloor \]
+      <p class="small">\(c_1 = 73856093,\; c_2 = 19349663,\; c_3 = 83492791\)</p>
+      <p class="small" style="margin-top:0.4em;">Same ray direction → same seed → no flicker when navigating light positions.</p>
+      <pre style="margin-top:0.5em;"><code class="language-cpp">for (int i = 0; i &lt; N_SAMPLES; ++i) {
+  Vec3 sample = light.pos
+              + randomUnitVec(rng) * light.radius;
+  Vec3 L = (sample - hit.point).normalized();
+  if (N.dot(L) &gt; 0 &amp;&amp; !occluded(...))
+      unblocked += 1.0;
+}
+double sf = unblocked / N_SAMPLES;</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 14 — SOFT SHADOWS ANALYSIS
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Soft Shadows: Analysis</h2>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>Pros</h4>
+      <ul>
+        <li>Physically correct penumbra</li>
+        <li>Continuous shadow gradient</li>
+        <li>Simple to understand and implement</li>
+        <li>Penumbra naturally scales with light size</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>Cons</h4>
+      <ul>
+        <li>16× slower than Lambert per pixel</li>
+        <li>Fixed \(N=16\) → residual noise at shadow edges</li>
+        <li>No importance sampling (uniform sphere)</li>
+        <li>Only diffuse; no specular term</li>
+        <li>No inter-reflection</li>
+      </ul>
+    </div>
+  </div>
+  <div class="highlight-box" style="margin-top:0.7em;">
+    <strong>State of the art:</strong> Production renderers use <strong>Multiple Importance Sampling (MIS)</strong> to combine BRDF sampling and light sampling optimally. ReSTIR (Bitterli et al., 2020) reuses reservoir samples across pixels and frames — achieving quality equivalent to sampling thousands of lights at the cost of ~1 sample per pixel.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PART 3 SEPARATOR
+     ═══════════════════════════════════════════════════════════ -->
+<section data-background-color="#1a0d2b">
+  <p class="part-title">Part 3</p>
+  <p class="part-title">Global Illumination: Whitted Ray Tracing</p>
+  <p class="part-sub">Recursive specular paths · Reflections · Limits of local models</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 15 — LIMITS OF LOCAL + PATH NOTATION
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Limits of Local Models: Path Notation</h2>
+  <p class="small">Shirley's regular-expression notation characterises which light transport paths each algorithm handles. \(E\) = eye, \(L\) = light, \(D\) = diffuse, \(G\) = glossy, \(S\) = specular.</p>
+  <table style="margin-top:0.6em;">
+    <thead><tr><th>Algorithm</th><th>Paths handled</th><th>What is missed</th></tr></thead>
+    <tbody>
+      <tr><td>Appel ray casting</td><td>\(E(D|G)L\)</td><td>everything beyond one bounce</td></tr>
+      <tr><td><strong>Whitted RT</strong></td><td>\(E[S^*](D|G)L\)</td><td>diffuse inter-reflection, caustics via diffuse</td></tr>
+      <tr><td>Radiosity (Goral)</td><td>\(ED^*L\)</td><td>specular effects entirely</td></tr>
+      <tr><td><strong>Path Tracing</strong></td><td>\(E[(D|G|S)^+]L\)</td><td>nothing (in principle)</td></tr>
+    </tbody>
+  </table>
+  <div class="highlight-box" style="margin-top:0.7em;">
+    Any algorithm that ignores whole classes of paths will produce systematically incorrect images — not just approximations, but <em>wrong answers</em> for scenes where those paths dominate (e.g., caustics, colour bleeding).
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 16 — WHITTED: MODEL
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Whitted Ray Tracing &nbsp;<span class="cite">Whitted, 1980</span></h2>
+  <p class="small">Extends Phong shading with recursive specular reflection and refraction. First algorithm to correctly handle mirror inter-reflections.</p>
+  <div class="two-col" style="margin-top:0.4em;">
+    <div>
+      <p class="eq-label">Illumination model:</p>
+      \[ I = I_a + k_d\sum_j(\hat{N}{\cdot}\hat{L}_j) + k_s S + k_t T \]
+      <p class="small">\(S\) = recursive specular reflection, \(T\) = refraction</p>
+      <p class="eq-label" style="margin-top:0.5em;">Reflection direction:</p>
+      \[ \vec{R} = \vec{D} - 2(\vec{D}{\cdot}\hat{N})\hat{N} \]
+      <p class="eq-label" style="margin-top:0.5em;">Refraction (Snell's law):</p>
+      \[ \vec{P} = k_r(2q + \vec{V}) - \hat{N}, \quad k_r = \frac{1}{\sqrt{k_n^2|q|^2 - |\vec{V}+\hat{N}|^2}} \]
+      <p class="small">\(q = \vec{V}/|V{\cdot}N|\), \(k_n\) = refractive index ratio</p>
+    </div>
+    <div>
+      <p class="eq-label">Blending (our implementation, no refraction):</p>
+      \[ C = C_\text{local}(1 - k) + C_\text{refl}\cdot k, \quad k = 0.4 \]
+      <pre><code class="language-cpp">// mirror reflection
+Vec3 R = D - N * (2.0 * D.dot(N));
+Ray  reflected(hit + N*1e-4, R);
+
+Color refl = traceImpl(reflected,
+                        scene, light,
+                        depth - 1);
+return local*(1.0-k) + refl*k;</code></pre>
+      <p class="small" style="margin-top:0.4em;">Recursion terminates at <code>depth == 0</code> or on scene miss.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 17 — WHITTED IMPLEMENTATION
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Whitted: Implementation Details</h2>
+  <div class="two-col">
+    <div>
+      <p class="eq-label">Full trace function:</p>
+      <pre><code class="language-cpp">Color traceImpl(Ray ray, Scene& s,
+                Light& l, int depth) {
+  auto hit   = s.trace(ray);
+  auto lhit  = l.intersect(ray);
+
+  // light sphere visible?
+  if (lhit &amp;&amp; (!hit || lhit-&gt;t &lt; hit-&gt;t))
+    return {1,1,1};
+  if (!hit)
+    return background(ray);
+
+  // local Blinn-Phong term
+  Color local = BlinnPhong::shadeHit(
+                  *hit, s, l, ray);
+  if (depth &lt;= 0) return local;
+
+  // reflect
+  Vec3 R = D - N*(2.0*D.dot(N));
+  Ray  refl(hit-&gt;point + N*1e-4, R);
+  Color rc = traceImpl(refl,s,l,depth-1);
+
+  return local*0.6 + rc*0.4;
+}</code></pre>
+    </div>
+    <div>
+      <p class="eq-label">Parameters:</p>
+      <ul class="small">
+        <li>MAX_DEPTH = 4 (4 mirror bounces max)</li>
+        <li>REFLECTIVITY = 0.4 (uniform for all surfaces)</li>
+        <li>Local term: full Blinn-Phong (reuses <code>BlinnPhong::shadeHit</code>)</li>
+      </ul>
+      <p class="eq-label" style="margin-top:0.6em;">Our simplifications vs. Whitted's original:</p>
+      <ul class="small">
+        <li>No refraction (\(k_t = 0\))</li>
+        <li>Uniform reflectivity — no per-material \(k_s\)</li>
+        <li>Hard shadows (no distributed shadow rays)</li>
+      </ul>
+      <p class="eq-label" style="margin-top:0.5em;">Complexity:</p>
+      <p class="small">Worst case \(O(2^d)\) rays per pixel (\(d\) = depth); in practice capped at 4 bounces = max 16 rays.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 18 — WHITTED ANALYSIS
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Whitted: Analysis</h2>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>Pros</h4>
+      <ul>
+        <li>Captures mirror inter-reflections</li>
+        <li>Handles specular caustics (e.g., sphere reflecting light on wall)</li>
+        <li>Correct specular path chains \(S^*\)</li>
+        <li>Deterministic — no noise</li>
+        <li>Bounded cost (depth cap)</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>Cons</h4>
+      <ul>
+        <li>Misses all diffuse inter-reflection</li>
+        <li>Uniform reflectivity — all surfaces identical</li>
+        <li>Hard shadows (no penumbra)</li>
+        <li>Not energy-conserving</li>
+        <li>No refraction in our implementation</li>
+      </ul>
+    </div>
+  </div>
+  <div class="highlight-box" style="margin-top:0.7em;">
+    <strong>State of the art:</strong> Whitted-style tracing is still used for specular-heavy effects in hybrid renderers. In game engines, <em>screen-space reflections</em> (SSR) approximate it cheaply; RTX hardware enables full recursive tracing in real time.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 19 — WHAT WHITTED MISSES
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>What Whitted Misses: Diffuse Interreflection</h2>
+  <div class="two-col">
+    <div>
+      <p class="small">Classic example: a white Cornell box with one red and one green wall. Adjacent white walls should pick up coloured light through multiple diffuse bounces.</p>
+      <p class="small" style="margin-top:0.4em;">Whitted traces \(E[S^*](D|G)L\): after one diffuse hit, tracing stops. The red/green bounce cannot reach the white walls — <strong>the image is simply wrong</strong>.</p>
+      <p class="small" style="margin-top:0.4em;"><strong>Radiosity</strong> (Goral et al., 1984) handles \(ED^*L\) — all diffuse-to-diffuse paths — but cannot handle specular at all.</p>
+    </div>
+    <div>
+      <div class="highlight-box">
+        <p class="small"><strong>The solution:</strong> treat the integral in the rendering equation as a high-dimensional integral and solve it with Monte Carlo sampling.</p>
+        <p class="small" style="margin-top:0.4em;">Kajiya (1986): each bounce randomly samples a new direction from the BRDF. After many samples per pixel the estimator converges to the true rendering equation solution for <em>all</em> path types simultaneously.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PART 4 SEPARATOR
+     ═══════════════════════════════════════════════════════════ -->
+<section data-background-color="#2b0d0d">
+  <p class="part-title">Part 4</p>
+  <p class="part-title">Monte Carlo Path Tracing</p>
+  <p class="part-sub">Rendering equation · Random walks · Russian Roulette · NEE</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 20 — RENDERING EQUATION FULL FORM
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Rendering Equation: Area Form</h2>
+  <p class="small">Convert the hemisphere integral to an area integral over all surfaces via \(d\omega_i = \cos\theta'/|\vec{x}-\vec{x}'|^2\,dA'\):</p>
+  \[
+    L_r(\vec{x}, \vec{\omega}) = \int_A f_r\!\left(\vec{x},\,\vec{\omega}(\vec{x},\vec{x}'),\,\vec{\omega}\right)
+    L_o(\vec{x}', \vec{\omega}(\vec{x}',\vec{x}))\;
+    G(\vec{x},\vec{x}')\; V(\vec{x},\vec{x}')\; dA'
+  \]
+  <p class="small">\(G(\vec{x},\vec{x}') = \cos\theta_i\cos\theta'_o\,/\,|\vec{x}-\vec{x}'|^2\) &nbsp;—&nbsp; geometry factor (differential form factor / \(\pi\))</p>
+  <div class="highlight-box" style="margin-top:0.5em;">
+    <p class="small">\(L\) appears on <em>both sides</em> → <strong>Fredholm integral equation of the second kind</strong></p>
+    \[ L = L_e + K \circ L \quad\Longrightarrow\quad L = (I-K)^{-1}\circ L_e = \sum_{n=0}^{\infty} K^n \circ L_e \]
+    <p class="small">Each term \(K^n \circ L_e\) = contribution of all light paths that make exactly \(n+2\) vertices (eye, \(n\) surface bounces, light).</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 21 — MONTE CARLO INTEGRATION
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Monte Carlo Integration</h2>
+  <div class="two-col">
+    <div>
+      <p class="eq-label">General Monte Carlo estimator:</p>
+      \[ \int f(x)\,dx \approx \frac{1}{N}\sum_{i=1}^{N} \frac{f(x_i)}{p(x_i)}, \quad x_i \sim p \]
+      <p class="small">Variance \(\sigma^2 \propto 1/N\) → error \(O(1/\sqrt{N})\) <em>regardless of dimension</em>. This is crucial — the rendering integral is over paths of unbounded length.</p>
+      <p class="eq-label" style="margin-top:0.5em;">Importance sampling:</p>
+      <p class="small">Choose \(p \propto f\) to minimise variance. For Lambertian BRDF:</p>
+      \[ p(\vec{\omega}_i) = \frac{\cos\theta_i}{\pi} \]
+      <p class="small">Cancels \(f_r\cos\theta_i\) in the estimator: weight per bounce = \(\rho\) only.</p>
+    </div>
+    <div>
+      <p class="eq-label">Cosine-weighted hemisphere sampling (Malley):</p>
+      \[ r = \sqrt{u_1},\quad \phi = 2\pi u_2 \]
+      \[ x = r\cos\phi,\quad y = r\sin\phi,\quad z = \sqrt{1-u_1} \]
+      <p class="small">Build ONB \((\vec{u},\vec{v},\hat{n})\) and return \(x\vec{u} + y\vec{v} + z\hat{n}\).</p>
+      <p class="eq-label" style="margin-top:0.5em;">Verification:</p>
+      \[ \frac{f_r \cos\theta}{p} = \frac{(\rho/\pi)\cos\theta}{\cos\theta/\pi} = \rho \;\checkmark \]
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 22 — PATH TRACING ALGORITHM
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>The Path Tracing Algorithm &nbsp;<span class="cite">Kajiya, 1986</span></h2>
+  <div class="two-col">
+    <div>
+      <p class="small">Eye-ray random walk (forward tracing):</p>
+      <div class="highlight-box small">
+        <strong>Step 1.</strong> weight \(= 1\), ray \(=\) camera ray<br>
+        <strong>Step 2.</strong> Trace ray → nearest hit<br>
+        <strong>Step 3A.</strong> \(L\) += weight \(\cdot L_e\) (emission)<br>
+        <strong>Step 3B.</strong> weight \(*=\rho\); scatter by BRDF → Step 2
+      </div>
+      <p class="eq-label" style="margin-top:0.5em;">Russian Roulette termination (unbiased):</p>
+      <p class="small">Continue with probability \(p = \max(\rho_r,\rho_g,\rho_b)\), clamp to \([0, 0.95]\).</p>
+      \[ \text{weight} \leftarrow \text{weight} / p \quad\text{(compensate)} \]
+      <p class="small">Expected value unchanged; path terminated with correct probability.</p>
+    </div>
+    <div>
+      <pre><code class="language-cpp">Color L = {0,0,0};
+Color throughput = {1,1,1};
+
+for (int d = 0; d &lt; maxDepth; ++d) {
+  auto hit = scene.trace(ray);
+  if (!hit) { L += throughput*sky; break; }
+
+  // accumulate emission
+  if (lastSpecular)
+    L += throughput * hit-&gt;mat-&gt;emission;
+
+  // Russian Roulette
+  double p = max(albedo.r,albedo.g,albedo.b);
+  if (d &gt;= rrStart &amp;&amp; rng.next() &gt; p) break;
+  if (d &gt;= rrStart) throughput *= 1.0/p;
+
+  throughput = hadamard(throughput, albedo);
+  ray = scatter(hit, ray, rng);
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 23 — BRDF SAMPLING
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>BRDF Sampling</h2>
+  <div class="two-col">
+    <div>
+      <p class="eq-label">Lambertian (\(f_r = \rho/\pi\)):</p>
+      <p class="small">Cosine-weighted hemisphere → weight = \(\rho\) (shown on previous slide).</p>
+      <pre><code class="language-cpp">// Malley's method
+double r   = sqrt(u1);
+double phi = 2.0*M_PI*u2;
+double x = r*cos(phi), y = r*sin(phi);
+double z = sqrt(max(0.0, 1.0 - u1));
+// transform to world via ONB(normal)</code></pre>
+      <p class="eq-label" style="margin-top:0.5em;">Mirror (\(f_r = \rho\,\delta(\vec{\omega}_i - \vec{R})\)):</p>
+      \[ \vec{R} = \vec{D} - 2(\vec{D}{\cdot}\hat{N})\hat{N} \]
+      <p class="small">Delta function: pdf = \(\infty\) at \(\vec{R}\), zero elsewhere. Estimator weight still = \(\rho\).</p>
+    </div>
+    <div>
+      <p class="eq-label">Orthonormal basis construction:</p>
+      <pre><code class="language-cpp">void ONB(Vec3 n, Vec3& u, Vec3& v) {
+  Vec3 a = (abs(n.x) &gt; 0.9)
+         ? Vec3{0,1,0} : Vec3{1,0,0};
+  v = n.cross(a).normalized();
+  u = n.cross(v);
+  // u,v,n are orthonormal, right-handed
+}</code></pre>
+      <p class="eq-label" style="margin-top:0.5em;">Material types in our implementation:</p>
+      <table>
+        <thead><tr><th>BRDF</th><th>Scatter</th><th>Weight</th></tr></thead>
+        <tbody>
+          <tr><td><code>Diffuse</code></td><td>cosine hemisphere</td><td>\(\rho\)</td></tr>
+          <tr><td><code>Specular</code></td><td>mirror \(\vec{R}\)</td><td>\(\rho\)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 24 — NEE
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Next Event Estimation (NEE)</h2>
+  <p class="small"><strong>Problem:</strong> pure BRDF sampling rarely hits small lights → high variance per sample → grainy image.</p>
+  <div class="two-col" style="margin-top:0.4em;">
+    <div>
+      <p class="eq-label">Direct lighting estimator (area form):</p>
+      \[
+        L_\text{direct} = \frac{f_r \cdot L_e \cdot \cos\theta_\text{hit} \cdot \cos\theta_\text{light} \cdot A_\text{light}}{d^2}
+      \]
+      <p class="small">\(A_\text{light} = 4\pi r^2\), \(\;p_\text{area} = 1/A\), \(\;f_r = \rho/\pi\)</p>
+      <p class="small">After folding \(\rho\) into throughput:</p>
+      \[ \text{weight} = \frac{\cos\theta_\text{hit}\cdot\cos\theta_\text{light}\cdot A}{\pi\, d^2} \]
+      <p class="eq-label" style="margin-top:0.4em;">Double-counting avoidance:</p>
+      <p class="small">After a diffuse bounce, \(L_e\) is suppressed at the next hit (NEE already counted it). Only camera rays and post-specular hits add \(L_e\) directly. → <code>lastSpecular</code> flag.</p>
+    </div>
+    <div>
+      <pre><code class="language-cpp">// at each diffuse hit:
+for (Sphere* light : scene.lights()) {
+  Vec3 lPt = light-&gt;center
+           + uniformSphere(rng)*light-&gt;radius;
+  Vec3 dir = (lPt - hit.point).normalized();
+  double dist = (lPt - hit.point).norm();
+
+  if (N.dot(dir) &lt;= 0) continue;
+  Vec3 lN = (lPt-light-&gt;center)/light-&gt;radius;
+  if (lN.dot(-dir) &lt;= 0) continue;  // back face
+  if (occluded(scene, hit, dir, dist)) continue;
+
+  double A = 4*M_PI*light-&gt;radius*light-&gt;radius;
+  double w = N.dot(dir) * lN.dot(-dir)
+           * A / (M_PI * dist*dist);
+  L += hadamard(throughput, light-&gt;emission)*w;
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 25 — TONE MAPPING
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Tone Mapping &amp; Display</h2>
+  <div class="two-col">
+    <div>
+      <p class="small">Path-traced radiance is HDR (unbounded). Display is 8-bit sRGB (\([0, 255]\)). Need a mapping that:</p>
+      <ul class="small">
+        <li>Compresses highlights without clipping</li>
+        <li>Preserves relative luminance in midtones</li>
+        <li>Approximates perceptual linearity</li>
+      </ul>
+      <p class="eq-label" style="margin-top:0.5em;">Reinhard operator:</p>
+      \[ x' = \frac{x}{1 + x} \]
+      <p class="small">Maps \([0, \infty) \to [0, 1)\). Asymptotically correct behaviour for overbright HDR.</p>
+      <p class="eq-label" style="margin-top:0.5em;">Gamma 2.2:</p>
+      \[ x'' = (x')^{1/2.2} \]
+      <p class="small">Linearises perceptual response of display. Combined:</p>
+      <pre><code class="language-cpp">int toSRGB(double x) {
+  x = x / (1.0 + x);          // Reinhard
+  x = pow(x, 1.0/2.2);        // gamma
+  return clamp((int)(x*255.999), 0, 255);
+}</code></pre>
+    </div>
+    <div>
+      <p class="eq-label">Progressive refinement:</p>
+      <p class="small">Accumulate per-pixel sums \(\sum L\); display running average \(\sum L / \text{spp}\) after each sample pass. Image visibly refines in real time.</p>
+      <pre><code class="language-cpp">sumR[idx] += L.r;
+// ...
+double inv = 1.0 / (double)spp;
+display.setPixel(col, row,
+  toSRGB(sumR[idx]*inv),
+  toSRGB(sumG[idx]*inv),
+  toSRGB(sumB[idx]*inv));</code></pre>
+      <p class="small" style="margin-top:0.4em;">Variance \(\propto 1/\text{spp}\) → doubling spp halves noise standard deviation. Clean image typically requires 256–4096 spp for our scenes.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 26 — PATH TRACING ANALYSIS
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Path Tracing: Analysis</h2>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>Pros</h4>
+      <ul>
+        <li>Unbiased estimator of the full rendering equation</li>
+        <li>Handles all light transport: colour bleeding, caustics, interreflection</li>
+        <li>Physically correct — no ad hoc parameters</li>
+        <li>Progressive: improves continuously with more samples</li>
+        <li>Naturally handles area lights, environment maps</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>Cons</h4>
+      <ul>
+        <li>Slow: error \(O(1/\sqrt{N})\); need \(4\times\) samples to halve noise</li>
+        <li>Fireflies: rare high-energy paths produce bright outlier pixels</li>
+        <li>Hard to debug — noise obscures visual artefacts</li>
+        <li>Caustics (\(ES^+DL\)) converge especially slowly</li>
+        <li>Glossy BRDF not implemented (only diffuse + mirror)</li>
+      </ul>
+    </div>
+  </div>
+  <div class="highlight-box" style="margin-top:0.6em;">
+    NEE dramatically reduces variance for scenes with visible emitters at the cost of one shadow ray per diffuse hit per light. The improvement is most visible at low spp (early convergence).
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 27 — ALGORITHM COMPARISON
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Algorithm Comparison</h2>
+  <table style="font-size:0.65em;">
+    <thead>
+      <tr><th></th><th>Lambert</th><th>Blinn-Phong</th><th>Soft Shadows</th><th>Whitted RT</th><th>Path Tracing</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Paths modeled</strong></td><td>\(E\,D\,L\)</td><td>\(E\,D\,L\)</td><td>\(E\,D\,L\)</td><td>\(E[S^*](D|G)L\)</td><td>\(E[(D|G|S)^+]L\)</td></tr>
+      <tr><td><strong>Shadows</strong></td><td>hard</td><td>hard</td><td>soft ✓</td><td>hard</td><td>soft (natural) ✓</td></tr>
+      <tr><td><strong>Specular</strong></td><td>none</td><td>highlight</td><td>none</td><td>recursive mirror ✓</td><td>mirror / diffuse ✓</td></tr>
+      <tr><td><strong>Interreflection</strong></td><td>no</td><td>no</td><td>no</td><td>specular only</td><td>full ✓</td></tr>
+      <tr><td><strong>Colour bleeding</strong></td><td>no</td><td>no</td><td>no</td><td>no</td><td>yes ✓</td></tr>
+      <tr><td><strong>Cost / pixel</strong></td><td>\(O(1)\)</td><td>\(O(1)\)</td><td>\(O(N)\)</td><td>\(O(2^d)\)</td><td>\(O(\text{spp})\)</td></tr>
+      <tr><td><strong>Noise-free</strong></td><td>yes</td><td>yes</td><td>soft noise</td><td>yes</td><td>converges</td></tr>
+      <tr><td><strong>Physical basis</strong></td><td>yes</td><td>partial</td><td>yes</td><td>partial</td><td>yes ✓</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PART 5 SEPARATOR
+     ═══════════════════════════════════════════════════════════ -->
+<section data-background-color="#2b1a0d">
+  <p class="part-title">Part 5</p>
+  <p class="part-title">State of the Art</p>
+  <p class="part-sub">RTX · ReSTIR · AI Denoising · Production renderers</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 28 — NVIDIA RTX
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Hardware Ray Tracing: NVIDIA RTX &nbsp;<span class="cite">2018–present</span></h2>
+  <div class="two-col">
+    <div>
+      <ul class="small">
+        <li><strong>RT Cores:</strong> fixed-function hardware for BVH traversal and ray–triangle intersection. Offloads the innermost loop of our voxel traversal entirely.</li>
+        <li><strong>Two-level BVH:</strong> BLAS per mesh (geometry), TLAS over all instances. Replaces our uniform grid; O(log n) traversal for any scene layout.</li>
+        <li><strong>Performance:</strong> ≈10 Giga-rays/sec (RTX 4090) vs ≈100M/sec software → enables real-time path tracing at 1080p/30fps.</li>
+        <li><strong>API:</strong> DXR (DirectX 12) / Vulkan RT — programmable shaders for ray-gen, closest-hit, any-hit, miss.</li>
+      </ul>
+    </div>
+    <div>
+      <div class="highlight-box">
+        <p class="small"><strong>BVH vs our uniform grid:</strong><br>
+        Our voxel grid: O(1) per step, but must step through many empty voxels in non-uniform scenes.<br><br>
+        SAH-split BVH: O(log n) traversal; adapts to scene density; standard in all production renderers since ~2000.</p>
+      </div>
+      <p class="small" style="margin-top:0.5em;">What stays the same: the shading and BRDF evaluation we implemented runs <em>identically</em> on the GPU — RT Cores only accelerate the intersection step.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 29 — ReSTIR
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>ReSTIR &nbsp;<span class="cite">Bitterli et al., 2020</span></h2>
+  <p class="small">Reservoir-based Spatiotemporal Importance Resampling — solves the many-light problem in NEE.</p>
+  <div class="two-col" style="margin-top:0.4em;">
+    <div>
+      <p class="small"><strong>Problem:</strong> our NEE casts one shadow ray per light per pixel. With thousands of lights, this is prohibitive.</p>
+      <p class="small" style="margin-top:0.4em;"><strong>Weighted Reservoir Sampling:</strong> maintain a size-\(M\) reservoir of light candidates. New candidate \(x\) accepted with probability \(w(x)/W_\text{total}\). After \(N \gg M\) candidates, reservoir contains \(M\) samples proportional to target distribution.</p>
+      <p class="small" style="margin-top:0.4em;"><strong>Spatial reuse:</strong> neighbouring pixels share reservoirs → effectively samples many more lights.</p>
+      <p class="small" style="margin-top:0.4em;"><strong>Temporal reuse:</strong> previous frame's reservoir reused → amortises cost over time.</p>
+    </div>
+    <div>
+      <div class="highlight-box">
+        <p class="small">Quality equivalent to sampling hundreds of lights per pixel, at cost of 1–2 shadow rays per pixel per frame.</p>
+      </div>
+      <p class="small" style="margin-top:0.5em;"><strong>In production:</strong></p>
+      <ul class="small">
+        <li>NVIDIA RTX Direct Illumination SDK</li>
+        <li>Cyberpunk 2077 path tracing mode</li>
+        <li>Alan Wake 2 full path tracing</li>
+      </ul>
+      <p class="small" style="margin-top:0.4em;">ReSTIR GI (2021) extends the same idea to indirect illumination (our path tracer's random walk).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 30 — AI DENOISING
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>AI Denoising &amp; DLSS</h2>
+  <div class="two-col">
+    <div>
+      <p class="small"><strong>Problem:</strong> path tracing at 1–4 spp is visibly noisy (as you'll see in our demo). Traditional denoising (bilateral filter, NL-means) smooths but blurs detail.</p>
+      <p class="small" style="margin-top:0.4em;"><strong>NVIDIA OptiX AI Denoiser (2017):</strong> CNN trained on HDR Monte Carlo renders. Takes noisy colour + optional albedo/normal G-buffer → clean image in a single pass. Replaces our running average.</p>
+      <p class="small" style="margin-top:0.4em;"><strong>DLSS 3.5 Ray Reconstruction (2023):</strong> joint denoising + temporal upscaling in one network. Rendered at 1080p with 1 spp → displayed at 4K with perceived quality of many spp.</p>
+    </div>
+    <div>
+      <div class="highlight-box">
+        <p class="small"><strong>Why CNNs work here:</strong><br>
+        Monte Carlo noise is high-frequency, spatially correlated, and lies on top of low-frequency signal. This is exactly the signal/noise structure that convolutional networks handle well, especially with temporal coherence as additional context.</p>
+      </div>
+      <p class="small" style="margin-top:0.5em;"><strong>Our running average</strong> (sum/spp) is the simplest possible "denoiser" — a box filter across time. It requires many samples to converge; AI denoising converges in 1–4.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 31 — PRODUCTION PATH TRACING
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Production: Pixar RenderMan &amp; Disney Hyperion</h2>
+  <div class="two-col">
+    <div>
+      <p class="eq-label">Multiple Importance Sampling (Veach, 1997):</p>
+      <p class="small">Combine BRDF sampling and NEE with weights:</p>
+      \[ w_i = \frac{p_i^k}{\sum_j p_j^k} \quad (k=2\text{: power heuristic}) \]
+      <p class="small">Balances sampling strategies — uses BRDF sampling when the BRDF lobe is narrow, light sampling when the light is small. Eliminates fireflies that arise from either strategy alone.</p>
+      <p class="small" style="margin-top:0.4em;"><strong>Pixar RenderMan:</strong> moved from REYES micropolygon rendering to path tracing for <em>Finding Dory</em> (2016). Uses MIS + next-vertex estimation + manifold exploration for caustics.</p>
+    </div>
+    <div>
+      <p class="small"><strong>Disney Hyperion:</strong> Bidirectional path tracing — connect eye paths and light paths at each vertex. Handles \(ES^+DL\) (caustics through specular surfaces) which unidirectional PT handles very poorly.</p>
+      <div class="highlight-box" style="margin-top:0.4em;">
+        <p class="small"><strong>Key difference from our implementation:</strong><br>
+        We use pure NEE (one strategy). Production uses MIS, which weights NEE and BRDF sampling per-vertex by how much each is expected to contribute — reducing variance for both large and small lights simultaneously.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 32 — UNREAL LUMEN
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Unreal Engine 5: Lumen</h2>
+  <div class="two-col">
+    <div>
+      <p class="small"><strong>Goal:</strong> real-time global illumination at 30–60 fps — not offline quality, but perceptually convincing.</p>
+      <p class="small" style="margin-top:0.4em;"><strong>Two-level tracing:</strong>
+      <ul class="small">
+        <li>Screen-space rays (no BVH, fast) for nearby geometry</li>
+        <li>Hardware RT for distant geometry (optional, GPU-dependent)</li>
+      </ul>
+      </p>
+      <p class="small" style="margin-top:0.4em;"><strong>Radiance cache:</strong> sparse voxel octree storing pre-integrated irradiance at discrete world positions. Updated incrementally each frame (small fraction of voxels refreshed per frame).</p>
+    </div>
+    <div>
+      <p class="small"><strong>Surface cache:</strong> material properties (albedo, normal, roughness) stored in a texture atlas. Ray hits look up into atlas rather than evaluating full material graph → avoids per-ray shader cost.</p>
+      <div class="highlight-box" style="margin-top:0.4em;">
+        <p class="small">Lumen is <em>not</em> physically exact — it's a carefully engineered approximation. The key innovation is making global illumination <em>interactive</em> by aggressively caching, reusing, and temporally amortising the expensive parts of the path tracing integral.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 33 — OPEN PROBLEMS
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>What Modern Renderers Handle — and Open Problems</h2>
+  <table>
+    <thead><tr><th>Capability</th><th>Our impl.</th><th>Production</th><th>Open problem?</th></tr></thead>
+    <tbody>
+      <tr><td>Diffuse interreflection</td><td>✓ (PT)</td><td>✓</td><td>—</td></tr>
+      <tr><td>Mirror reflections</td><td>✓ (Whitted/PT)</td><td>✓</td><td>—</td></tr>
+      <tr><td>Glossy BRDF (GGX)</td><td>✗</td><td>✓</td><td>—</td></tr>
+      <tr><td>Soft shadows</td><td>✓</td><td>✓ (MIS)</td><td>—</td></tr>
+      <tr><td>Caustics (\(ES^+DL\))</td><td>partial</td><td>partial</td><td>✓ (hard)</td></tr>
+      <tr><td>Participating media</td><td>✗</td><td>✓</td><td>partial</td></tr>
+      <tr><td>Spectral rendering</td><td>✗</td><td>✓</td><td>—</td></tr>
+      <tr><td>Neural radiance cache</td><td>✗</td><td>research</td><td>✓ active</td></tr>
+    </tbody>
+  </table>
+  <p class="small" style="margin-top:0.5em; color:#a8dadc;">Müller et al. (NVIDIA NRC, 2021): train a small MLP <em>online</em> during rendering to cache indirect radiance — amortises cost of indirect lighting over frames.</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PART 6 SEPARATOR
+     ═══════════════════════════════════════════════════════════ -->
+<section data-background-color="#0d1a2b">
+  <p class="part-title">Part 6</p>
+  <p class="part-title">Next Steps &amp; Summary</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 34 — NEXT STEPS: THIS IMPLEMENTATION
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Next Steps: This Implementation</h2>
+  <div class="two-col">
+    <div>
+      <p class="eq-label">Near-term (weeks):</p>
+      <ul class="small">
+        <li><strong>Per-material properties</strong> — add <code>reflectivity</code>, <code>roughness</code>, <code>ior</code> to <code>Sphere</code>/<code>HitRecord</code>; currently Whitted uses uniform 0.4</li>
+        <li><strong>Refraction in Whitted</strong> — Snell's law is already derived; add \(k_t\) and ray bending</li>
+        <li><strong>GGX microfacet BRDF</strong> — replace perfect mirror with importance-sampled GGX lobe; adds <code>BRDF::Glossy</code>; blurry reflections with a roughness parameter</li>
+        <li><strong>BVH</strong> — replace uniform voxel grid with SAH-split BVH; O(log n) traversal for non-uniform scenes</li>
+      </ul>
+    </div>
+    <div>
+      <p class="eq-label">Medium-term:</p>
+      <ul class="small">
+        <li><strong>Multiple Importance Sampling</strong> — combine NEE + BRDF sampling with power heuristic; eliminates fireflies</li>
+        <li><strong>Environment map</strong> — replace procedural sky gradient with an HDR image; importance-sample by luminance</li>
+        <li><strong>Triangle meshes</strong> — extend beyond spheres; Möller–Trumbore ray–triangle intersection</li>
+        <li><strong>Texture maps</strong> — UV coordinates on spheres; albedo from image</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 35 — NEXT STEPS: RESEARCH
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Next Steps: Research-Level Extensions</h2>
+  <table>
+    <thead><tr><th>Topic</th><th>What it adds</th><th>Key reference</th></tr></thead>
+    <tbody>
+      <tr><td>GGX / VNDF sampling</td><td>Physically correct glossy BRDFs</td><td>Walter et al., 2007</td></tr>
+      <tr><td>Bidirectional PT</td><td>Caustics, difficult light paths</td><td>Lafortune &amp; Willems, 1993</td></tr>
+      <tr><td>Metropolis LT</td><td>Efficient rare-path sampling</td><td>Veach &amp; Guibas, 1997</td></tr>
+      <tr><td>Participating media</td><td>Fog, clouds, subsurface scatter</td><td>Pharr et al., PBRT ch.11</td></tr>
+      <tr><td>Spectral rendering</td><td>Dispersion, fluorescence</td><td>Wilkie et al., 2014</td></tr>
+      <tr><td>Neural radiance cache</td><td>Amortise indirect over frames</td><td>Müller et al. (NVIDIA), 2021</td></tr>
+      <tr><td>ReSTIR GI</td><td>Reuse indirect lighting samples</td><td>Ouyang et al., 2021</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 36 — SUMMARY TABLE
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Summary: What We Built</h2>
+  <table>
+    <thead><tr><th>Component</th><th>Key paper</th><th>File</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Spatial acceleration</td><td>Amanatides &amp; Woo, 1987</td><td><code>src/VoxelGrid.hpp</code></td><td>DDA, rayID dedup</td></tr>
+      <tr><td>Lambert diffuse</td><td>Lambert, 1760</td><td><code>algorithms/lambert.hpp</code></td><td>ambient 0.12</td></tr>
+      <tr><td>Blinn-Phong</td><td>Blinn, 1977</td><td><code>algorithms/blinn_phong.hpp</code></td><td>\(n=64, \sigma=0.6\)</td></tr>
+      <tr><td>Soft shadows</td><td>Cook et al., 1984</td><td><code>algorithms/soft_shadows.hpp</code></td><td>\(N=16\), Marsaglia</td></tr>
+      <tr><td>Whitted RT</td><td>Whitted, 1980</td><td><code>algorithms/whitted.hpp</code></td><td>depth 4, \(k=0.4\)</td></tr>
+      <tr><td>Path tracer</td><td>Kajiya, 1986</td><td><code>pathTracing/PathTracer.hpp</code></td><td>RR, maxDepth 8</td></tr>
+      <tr><td>NEE</td><td>Cook et al., 1984</td><td><code>pathTracing/PathTracer.hpp</code></td><td>area-light shadow ray</td></tr>
+    </tbody>
+  </table>
+  <div class="highlight-box" style="margin-top:0.7em;">
+    CLI: &nbsp;<code>./raytrace &lt;scene&gt; &lt;algo&gt;</code> &nbsp;|&nbsp; <code>./pathtrace &lt;scene&gt;</code><br>
+    Algos: <code>lambert</code> &nbsp;<code>phong</code> &nbsp;<code>soft</code> &nbsp;<code>whitted</code>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 37 — THANK YOU / DEMO
+     ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2 style="margin-bottom:0.4em;">Thank You</h2>
+  <p style="color:#a8dadc; font-size:0.85em;">Questions?</p>
+  <hr style="border-color:#1d3557; margin:0.8em auto; width:50%;">
+  <p class="small" style="margin-top:0.8em;">Live demo:</p>
+  <pre style="display:inline-block; text-align:left; width:auto;"><code class="language-bash"># Ray tracer — navigate 20 light positions
+./raytrace ring whitted
+./raytrace ring phong
+./raytrace ring soft
+
+# Path tracer — watch convergence with NEE
+./pathtrace ring
+./pathtrace single</code></pre>
+  <p class="small" style="margin-top:0.8em; color:#666;">
+    Papers: <em>math/</em> directory &nbsp;·&nbsp;
+    Source: <em>src/ algorithms/ pathTracing/</em>
+  </p>
+</section>
+
+</div><!-- .slides -->
+</div><!-- .reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/plugin/highlight/highlight.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/plugin/notes/notes.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/plugin/math/math.js"></script>
+
+<script>
+Reveal.initialize({
+    width: 1280,
+    height: 720,
+    margin: 0.04,
+    minScale: 0.2,
+    maxScale: 2.0,
+
+    controls: true,
+    progress: true,
+    slideNumber: true,
+    history: true,
+    keyboard: true,
+    overview: true,
+    center: true,
+    touch: true,
+    loop: false,
+    transition: 'slide',
+    transitionSpeed: 'default',
+
+    math: {
+        mathjax: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
+        config: 'TeX-AMS_HTML-full',
+        tex2jax: {
+            inlineMath: [['\\(','\\)']],
+            displayMath: [['\\[','\\]']],
+            balanceBraces: true,
+        },
+        TeX: {
+            Macros: {},
+            equationNumbers: { autoNumber: 'AMS' }
+        }
+    },
+
+    plugins: [ RevealHighlight, RevealNotes, RevealMath.MathJax3 ]
+});
+</script>
+</body>
+</html>

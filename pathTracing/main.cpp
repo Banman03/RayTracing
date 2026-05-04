@@ -20,18 +20,28 @@
 
 namespace pt = PathTracing;
 
-// Output settings — kept smaller than the rasterized ray tracer because
-// Monte Carlo path tracing requires many samples per pixel to converge.
-constexpr int    W           = 800;
-constexpr int    H           = 900;
-constexpr int    MAX_DEPTH   = 6;
-constexpr int    RR_START    = 3;
-constexpr int    MAX_SAMPLES = 4096;
-constexpr int    PRESENT_ROWS = 32;
+constexpr int W            = 800;
+constexpr int H            = 900;
+constexpr int MAX_DEPTH    = 6;
+constexpr int RR_START     = 3;
+constexpr int MAX_SAMPLES  = 4096;
+constexpr int PRESENT_ROWS = 32;
+constexpr int NUM_LIGHTS   = 20;
 
-// Reinhard tone-mapping followed by gamma 2.2 — the simplest pair that
-// keeps emissive surfaces from clipping while still producing a perceptually
-// linear-ish output.
+// Same LCG seed as the ray tracer so light positions are comparable.
+static std::vector<Ray::Vec3> generateLights(int n) {
+    uint32_t rng = 9001;
+    auto next = [&](double lo, double hi) -> double {
+        rng = rng * 1664525u + 1013904223u;
+        return lo + ((rng >> 16) / 65535.0) * (hi - lo);
+    };
+    std::vector<Ray::Vec3> lights(n);
+    for (auto& l : lights)
+        l = { next(-7, 7), next(3, 12), next(-4, 9) };
+    return lights;
+}
+
+// Reinhard tone-map + gamma 2.2.
 static int toSRGB(double x) {
     if (x < 0.0) x = 0.0;
     x = x / (1.0 + x);
@@ -39,11 +49,11 @@ static int toSRGB(double x) {
     return std::clamp((int)(x * 255.999), 0, 255);
 }
 
-static pt::SceneConfig buildScene(const std::string& name) {
-    if (name == "single")       return pt::Scenes::singleSphere(W, H);
-    if (name == "solar_system") return pt::Scenes::solarSystem(W, H);
-    if (name == "ring")         return pt::Scenes::ring(W, H);
-    if (name == "random_field") return pt::Scenes::randomField(W, H);
+static pt::SceneConfig buildScene(const std::string& name, Ray::Vec3 lightPos) {
+    if (name == "single")       return pt::Scenes::singleSphere(W, H, lightPos);
+    if (name == "solar_system") return pt::Scenes::solarSystem(W, H, lightPos);
+    if (name == "ring")         return pt::Scenes::ring(W, H, lightPos);
+    if (name == "random_field") return pt::Scenes::randomField(W, H, lightPos);
     std::cerr << "Unknown scene \"" << name << "\".\n"
               << "Available: single  solar_system  ring  random_field\n";
     std::exit(1);
@@ -59,75 +69,66 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    Display display(W, H, "PathTracing");
+    auto lightPositions = generateLights(NUM_LIGHTS);
 
-    // Per-pixel accumulators; we average sums across all completed samples
-    // to produce a progressively-refined image.
+    Display display(W, H, "");
+
     std::vector<double> sumR(W * H, 0.0);
     std::vector<double> sumG(W * H, 0.0);
     std::vector<double> sumB(W * H, 0.0);
 
-    // Each scene gets its own seed so reloading produces the same image.
-    auto loadScene = [&](const std::string& name) -> pt::SceneConfig {
-        std::fill(sumR.begin(), sumR.end(), 0.0);
-        std::fill(sumG.begin(), sumG.end(), 0.0);
-        std::fill(sumB.begin(), sumB.end(), 0.0);
-        display.clear();
-        display.present();
-        return buildScene(name);
-    };
+    int  lightIdx = 0;
+    int  spp      = 0;
+    bool quit     = false;
 
-    pt::SceneConfig cfg = loadScene(sceneName);
+    pt::SceneConfig cfg    = buildScene(sceneName, lightPositions[lightIdx]);
     pt::PathTracer  tracer(cfg, MAX_DEPTH, RR_START);
     pt::RNG         rng(0xC0FFEEu);
 
-    constexpr const char* SCENE_LIST[] = {
-        "single", "solar_system", "ring", "random_field"
+    // Switch to a new light index: rebuild scene, clear accumulators.
+    auto resetLight = [&](int newIdx) {
+        lightIdx = newIdx;
+        cfg    = buildScene(sceneName, lightPositions[lightIdx]);
+        tracer = pt::PathTracer(cfg, MAX_DEPTH, RR_START);
+        std::fill(sumR.begin(), sumR.end(), 0.0);
+        std::fill(sumG.begin(), sumG.end(), 0.0);
+        std::fill(sumB.begin(), sumB.end(), 0.0);
+        spp = 0;
+        display.clear();
+        display.present();
     };
-    constexpr int NUM_SCENES = sizeof(SCENE_LIST) / sizeof(SCENE_LIST[0]);
-
-    int sceneIdx = 0;
-    for (int i = 0; i < NUM_SCENES; ++i)
-        if (SCENE_LIST[i] == sceneName) sceneIdx = i;
-
-    bool quit  = false;
-    int  spp   = 0;          // completed samples per pixel
 
     while (!quit) {
-        char title[160];
+        const Ray::Vec3& lp = lightPositions[lightIdx];
+        char title[200];
         std::snprintf(title, sizeof(title),
-            "PathTracing — %s   spp=%d   depth=%d   ← → to switch scenes",
-            sceneName.c_str(), spp, MAX_DEPTH);
+            "PathTracing — %s   [%d/%d]  light (%.1f, %.1f, %.1f)   spp=%d   depth=%d   ← → to navigate",
+            sceneName.c_str(), lightIdx + 1, NUM_LIGHTS,
+            lp.x, lp.y, lp.z, spp, MAX_DEPTH);
         display.setTitle(title);
 
         if (spp >= MAX_SAMPLES) {
-            // Converged enough; idle on the input queue until a key event.
             switch (display.waitEvent()) {
-                case Event::Quit:      quit = true; break;
-                case Event::PrevScene: sceneIdx = (sceneIdx + NUM_SCENES - 1) % NUM_SCENES;
-                                       sceneName = SCENE_LIST[sceneIdx];
-                                       cfg = loadScene(sceneName);
-                                       tracer = pt::PathTracer(cfg, MAX_DEPTH, RR_START);
-                                       spp = 0;
-                                       break;
-                case Event::NextScene: sceneIdx = (sceneIdx + 1) % NUM_SCENES;
-                                       sceneName = SCENE_LIST[sceneIdx];
-                                       cfg = loadScene(sceneName);
-                                       tracer = pt::PathTracer(cfg, MAX_DEPTH, RR_START);
-                                       spp = 0;
-                                       break;
-                case Event::None:      break;
+                case Event::Quit:
+                    quit = true;
+                    break;
+                case Event::PrevScene:
+                    resetLight((lightIdx + NUM_LIGHTS - 1) % NUM_LIGHTS);
+                    break;
+                case Event::NextScene:
+                    resetLight((lightIdx + 1) % NUM_LIGHTS);
+                    break;
+                case Event::None:
+                    break;
             }
             continue;
         }
 
-        // ---- one sample-per-pixel pass over the image -------------------------
         bool interrupted = false;
-        int  thisSample  = spp + 1;          // 1-based sample index after this pass
+        int  thisSample  = spp + 1;
 
         for (int row = 0; row < H && !quit && !interrupted; ++row) {
             for (int col = 0; col < W; ++col) {
-                // Subpixel jitter inside [0, 1) on each axis. (paper §1.1)
                 double jx = rng.next();
                 double jy = rng.next();
                 Ray::Ray ray = cfg.camera.pixelRay(col + jx, row + jy);
@@ -140,38 +141,34 @@ int main(int argc, char* argv[]) {
                 sumB[idx] += L.b;
 
                 double inv = 1.0 / (double)thisSample;
-                int ir = toSRGB(sumR[idx] * inv);
-                int ig = toSRGB(sumG[idx] * inv);
-                int ib = toSRGB(sumB[idx] * inv);
-                display.setPixel(col, row, ir, ig, ib);
+                display.setPixel(col, row,
+                    toSRGB(sumR[idx] * inv),
+                    toSRGB(sumG[idx] * inv),
+                    toSRGB(sumB[idx] * inv));
             }
 
             if ((row % PRESENT_ROWS) == (PRESENT_ROWS - 1) || row == H - 1) {
                 display.present();
                 switch (display.pollEvent()) {
-                    case Event::Quit:      quit = true; break;
-                    case Event::PrevScene: sceneIdx = (sceneIdx + NUM_SCENES - 1) % NUM_SCENES;
-                                           sceneName = SCENE_LIST[sceneIdx];
-                                           cfg = loadScene(sceneName);
-                                           tracer = pt::PathTracer(cfg, MAX_DEPTH, RR_START);
-                                           spp = 0;
-                                           interrupted = true;
-                                           break;
-                    case Event::NextScene: sceneIdx = (sceneIdx + 1) % NUM_SCENES;
-                                           sceneName = SCENE_LIST[sceneIdx];
-                                           cfg = loadScene(sceneName);
-                                           tracer = pt::PathTracer(cfg, MAX_DEPTH, RR_START);
-                                           spp = 0;
-                                           interrupted = true;
-                                           break;
-                    case Event::None:      break;
+                    case Event::Quit:
+                        quit = true;
+                        break;
+                    case Event::PrevScene:
+                        resetLight((lightIdx + NUM_LIGHTS - 1) % NUM_LIGHTS);
+                        interrupted = true;
+                        break;
+                    case Event::NextScene:
+                        resetLight((lightIdx + 1) % NUM_LIGHTS);
+                        interrupted = true;
+                        break;
+                    case Event::None:
+                        break;
                 }
             }
         }
 
-        if (!interrupted && !quit) {
+        if (!interrupted && !quit)
             spp = thisSample;
-        }
     }
 
     return 0;

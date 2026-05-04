@@ -15,7 +15,7 @@
 // of scenes/ring.hpp.
 namespace PathTracing::Scenes {
 
-inline SceneConfig ring(int W, int H) {
+inline SceneConfig ring(int W, int H, Ray::Vec3 lightPos = {0.0, 6.0, 5.5}) {
     Scene scene(W, H, {-7, -4, -1}, {7, 9, 12}, 24, 16, 22);
 
     constexpr int    N           = 10;
@@ -50,7 +50,7 @@ inline SceneConfig ring(int W, int H) {
 
     // Overhead area light.
     scene.addSphere(std::make_unique<Sphere>(
-        Ray::Vec3{cx, 6.0, cz}, 1.6,
+        lightPos, 1.6,
         Material::light({14.0, 14.0, 12.0})));
 
     SceneConfig cfg(std::move(scene), Camera({0, 3, -4}, {0, 0, 5.5}, W, H));

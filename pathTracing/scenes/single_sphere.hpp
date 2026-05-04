@@ -11,7 +11,7 @@
 // rasterized ray tracer.
 namespace PathTracing::Scenes {
 
-inline SceneConfig singleSphere(int W, int H) {
+inline SceneConfig singleSphere(int W, int H, Ray::Vec3 lightPos = {2.5, 6.0, 4.0}) {
     Scene scene(W, H, {-6, -4, -3}, {6, 12, 12}, 16, 16, 22);
 
     scene.addSphere(std::make_unique<Sphere>(
@@ -23,7 +23,7 @@ inline SceneConfig singleSphere(int W, int H) {
         Material::diffuse({0.75, 0.75, 0.75})));
 
     scene.addSphere(std::make_unique<Sphere>(
-        Ray::Vec3{2.5, 6.0, 4.0}, 1.4,
+        lightPos, 1.4,
         Material::light({18.0, 17.0, 14.0})));
 
     SceneConfig cfg(std::move(scene), Camera({0, 1, -3}, {0, 0, 5}, W, H));

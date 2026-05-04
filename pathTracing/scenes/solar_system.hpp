@@ -10,12 +10,12 @@
 // rendering is naturally illuminated by it. No sky.
 namespace PathTracing::Scenes {
 
-inline SceneConfig solarSystem(int W, int H) {
+inline SceneConfig solarSystem(int W, int H, Ray::Vec3 lightPos = {0.0, 0.0, 5.0}) {
     Scene scene(W, H, {-6, -6, -3}, {16, 6, 15}, 40, 20, 32);
 
     // Sun — emissive. The numbers above 1.0 are radiance, not albedo.
     scene.addSphere(std::make_unique<Sphere>(
-        Ray::Vec3{0, 0, 5}, 2.5,
+        lightPos, 2.5,
         Material::light({9.0, 7.5, 4.0})));
 
     // Mercury (grey)

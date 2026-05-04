@@ -10,7 +10,7 @@
 // emissive lights overhead. Mirror of scenes/random_field.hpp.
 namespace PathTracing::Scenes {
 
-inline SceneConfig randomField(int W, int H) {
+inline SceneConfig randomField(int W, int H, Ray::Vec3 lightPos = {0.0, 5.5, 5.0}) {
     Scene scene(W, H, {-8, -4, -2}, {8, 8, 11}, 28, 14, 22);
 
     uint32_t rng = 42;
@@ -47,13 +47,10 @@ inline SceneConfig randomField(int W, int H) {
         Ray::Vec3{0, -101, 4}, 100.0,
         Material::diffuse({0.65, 0.65, 0.70})));
 
-    // Two emissive lights for nicer shadows.
+    // Area light at the randomized position.
     scene.addSphere(std::make_unique<Sphere>(
-        Ray::Vec3{-4, 5.5, 3.5}, 1.5,
-        Material::light({16.0, 12.0, 8.0})));
-    scene.addSphere(std::make_unique<Sphere>(
-        Ray::Vec3{4.5, 5.5, 6.5}, 1.5,
-        Material::light({8.0, 12.0, 16.0})));
+        lightPos, 1.5,
+        Material::light({16.0, 14.0, 10.0})));
 
     SceneConfig cfg(std::move(scene), Camera({0, 4, -5}, {0, 0, 4}, W, H));
     cfg.skyTop    = {0.18, 0.22, 0.40};
