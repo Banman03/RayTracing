@@ -1,18 +1,24 @@
 #include <iostream>
+#include <functional>
 #include <cmath>
 #include <algorithm>
-#include <stdexcept>
 #include <string>
 #include <vector>
 #include <cstdio>
 #include "SceneConfig.hpp"
 #include "Pixel.hpp"
 #include "Display.hpp"
+#include "Light.hpp"
 
 #include "scenes/single_sphere.hpp"
 #include "scenes/solar_system.hpp"
 #include "scenes/ring.hpp"
 #include "scenes/random_field.hpp"
+
+#include "algorithms/lambert.hpp"
+#include "algorithms/blinn_phong.hpp"
+#include "algorithms/soft_shadows.hpp"
+#include "algorithms/whitted.hpp"
 
 // Light position generation
 
@@ -28,44 +34,20 @@ static std::vector<Ray::Vec3> generateLights(int n) {
     return lights;
 }
 
-// Shading
+// Algorithm dispatcher
 
-static Pixel::Color background(const Ray::Ray& ray) {
-    double t = 0.5 * (ray.direction.y + 1.0);
-    return {1.0 - 0.5 * t, 1.0 - 0.3 * t, 1.0};
-}
+using TraceFn = std::function<Pixel::Color(const Ray::Ray&,
+                                           const Scene::Scene&,
+                                           const Light&)>;
 
-static Pixel::Color shade(const RayTracing::HitRecord& hit,
-                          const Ray::Vec3& lightPos,
-                          const Scene::Scene& scene)
-{
-    Ray::Vec3 toLight   = lightPos - hit.point;
-    double    distLight = toLight.norm();
-    Ray::Vec3 L = {toLight.x / distLight,
-                   toLight.y / distLight,
-                   toLight.z / distLight};
-
-    double NdotL = hit.normal.x * L.x +
-                   hit.normal.y * L.y +
-                   hit.normal.z * L.z;
-
-    bool inShadow = false;
-    if (NdotL > 0.0) {
-        Ray::Vec3 shadowOrig = hit.point + hit.normal * 1e-4;
-        Ray::Ray  shadowRay(shadowOrig, L);
-        if (auto blocker = scene.trace(shadowRay))
-            if (blocker->t < distLight - 1e-4)
-                inShadow = true;
-    }
-
-    double ambient   = 0.12;
-    double diffuse   = (!inShadow && NdotL > 0.0) ? NdotL : 0.0;
-    double intensity = ambient + (1.0 - ambient) * diffuse;
-
-    double r = intensity * (0.5 + 0.5 * hit.normal.x);
-    double g = intensity * (0.3 + 0.5 * hit.normal.y);
-    double b = intensity * (0.4 + 0.3 * hit.normal.z);
-    return {r, g, b};
+static TraceFn pickAlgorithm(const std::string& name) {
+    if (name == "lambert") return Algorithms::Lambert::trace;
+    if (name == "phong")   return Algorithms::BlinnPhong::trace;
+    if (name == "soft")    return Algorithms::SoftShadows::trace;
+    if (name == "whitted") return Algorithms::Whitted::trace;
+    std::cerr << "Unknown algorithm \"" << name << "\".\n"
+              << "Available: lambert  phong  soft  whitted\n";
+    std::exit(1);
 }
 
 // Scene registry
@@ -84,13 +66,21 @@ static SceneConfig buildScene(const std::string& name, int W, int H) {
 
 int main(int argc, char* argv[]) {
     std::string sceneName = "solar_system";
+    std::string algoName  = "lambert";
+
     if (argc == 2) {
         sceneName = argv[1];
+    } else if (argc == 3) {
+        sceneName = argv[1];
+        algoName  = argv[2];
     } else if (argc != 1) {
-        std::cerr << "Usage: " << argv[0] << " [scene]\n"
-                  << "Scenes: single  solar_system  ring  random_field\n";
+        std::cerr << "Usage: " << argv[0] << " [scene [algo]]\n"
+                  << "Scenes: single  solar_system  ring  random_field\n"
+                  << "Algos:  lambert  phong  soft  whitted\n";
         return 1;
     }
+
+    TraceFn algo = pickAlgorithm(algoName);
 
     constexpr int W = 800;
     constexpr int H = 900;
@@ -106,12 +96,12 @@ int main(int argc, char* argv[]) {
 
     while (!quit) {
         const Ray::Vec3& lightPos = lights[idx];
-        RayTracing::Sphere lightSphere(lightPos, lightSphereRadius);
+        Light light{lightPos, lightSphereRadius};
 
-        char title[128];
+        char title[160];
         std::snprintf(title, sizeof(title),
-            "RayTracing — %s  [%d/%d]  light (%.1f, %.1f, %.1f)  ← → to navigate",
-            sceneName.c_str(), idx + 1, NUM_LIGHTS,
+            "RayTracing — %s [%s]  [%d/%d]  light (%.1f, %.1f, %.1f)  ← → to navigate",
+            sceneName.c_str(), algoName.c_str(), idx + 1, NUM_LIGHTS,
             lightPos.x, lightPos.y, lightPos.z);
         display.setTitle(title);
 
@@ -123,16 +113,7 @@ int main(int argc, char* argv[]) {
             for (int col = 0; col < W; ++col) {
                 Ray::Ray ray = cfg.camera.pixelRay(col, row);
 
-                auto sceneHit = cfg.scene.trace(ray);
-                auto lightHit = lightSphere.intersect(ray);
-
-                Pixel::Color c;
-                if (lightHit && (!sceneHit || lightHit->t < sceneHit->t))
-                    c = {1.0, 1.0, 1.0};
-                else if (sceneHit)
-                    c = shade(*sceneHit, lightPos, cfg.scene);
-                else
-                    c = background(ray);
+                Pixel::Color c = algo(ray, cfg.scene, light);
 
                 int ir = std::clamp((int)(c.r * 255.999), 0, 255);
                 int ig = std::clamp((int)(c.g * 255.999), 0, 255);
