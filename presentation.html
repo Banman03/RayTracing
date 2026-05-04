@@ -117,10 +117,11 @@
     <li>\(L_i(\vec{x},\vec{\omega}_i) = L_o(\vec{x}', -\vec{\omega}_i)\) — radiance arriving from direction \(\omega_i\)</li>
     <li>\(\cos\theta_i\) — Lambert foreshortening</li>
   </ul>
+  <p class="small" style="margin-top:0.6em;">\(L_i(\vec{x},\vec{\omega}_i)\) is the outgoing radiance \(L_o\) of whatever surface is visible from \(\vec{x}\) in direction \(\vec{\omega}_i\) — so \(L\) appears on both sides of the equation. This self-referential structure makes it a <strong>Fredholm integral equation of the second kind</strong>: the unknown function is part of the integrand, and it cannot be solved by direct evaluation.</p>
   <div class="highlight-box" style="margin-top:0.7em;">
     <strong>Operator form:</strong> \(L = L_e + K \circ L\) &nbsp;→&nbsp;
     Neumann series: \(L = \displaystyle\sum_{n=0}^{\infty} K^n \circ L_e\)<br>
-    <span class="smaller">\(K^n\) = contribution from all light paths of exactly \(n\) bounces</span>
+    <span class="smaller">\(K^n\) = contribution from all light paths of exactly \(n\) bounces. Path tracing samples individual \(K^n\) terms — depth \(n\) paths.</span>
   </div>
   <p class="small" style="color:#a8dadc; margin-top:0.5em;">Every algorithm in this talk is an approximation or estimator of this equation.</p>
 </section>
@@ -158,6 +159,7 @@
 <section>
   <h2>Spatial Acceleration: Amanatides &amp; Woo &nbsp;<span class="cite">1987</span></h2>
   <p class="small">Naïve intersection: \(O(n)\) per ray. Uniform voxel grid + DDA traversal: \(O(\sqrt[3]{n})\) average.</p>
+  <p class="small"><code>tMax[X]</code> = ray parameter at which the ray next crosses an X-axis voxel boundary. <code>tDelta[X]</code> = how much \(t\) increases per voxel width along X. At each step we advance across the nearest boundary — guaranteed front-to-back order.</p>
   <div class="two-col" style="margin-top:0.5em;">
     <div>
       <p class="eq-label">Initialization (slab test → entry voxel):</p>
@@ -230,6 +232,7 @@ tDelta[X] = voxelSize / |d.x|;
     <div>
       <p class="eq-label">BRDF (constant):</p>
       \[ f_r = \frac{\rho}{\pi} \]
+      <p class="small">The \(1/\pi\) normalises the BRDF so that \(\int f_r \cos\theta\, d\omega = \rho\) over the hemisphere — without it the surface could reflect more energy than it receives (energy non-conservation).</p>
       <p class="eq-label" style="margin-top:0.5em;">Irradiance from Lambert's law:</p>
       \[ E = \Phi_L \cos\theta_i = \Phi_L\,(\hat{N}\cdot\hat{L}) \]
       <p class="eq-label" style="margin-top:0.5em;">Rendered intensity:</p>
@@ -301,8 +304,7 @@ b = intensity * (0.4 + 0.3 * n.z);</code></pre>
     </div>
     <div>
       <p class="eq-label">\(F\) — Fresnel reflectance:</p>
-      \[ F = \frac{1}{2}\!\left[\frac{\sin^2(\phi-\theta)}{\sin^2(\phi+\theta)} + \frac{\tan^2(\phi-\theta)}{\tan^2(\phi+\theta)}\right] \]
-      <p class="small" style="margin-top:0.3em;">\(\phi\) = angle of incidence, \(\theta = \sin^{-1}(\sin\phi / n)\)</p>
+      <p class="small">At normal incidence, glass reflects ~4% of light. At grazing angles (~90°), it reflects nearly 100%. The Fresnel equations give the exact angle-dependent reflectance. Blinn drops this term for efficiency, making reflectivity constant regardless of viewing angle — a known limitation.</p>
       <p class="eq-label" style="margin-top:0.5em;">Blinn's simplification:</p>
       <p class="small">Replace \(D\) with \((\hat{N}\cdot\hat{H})^n\); drop \(G\) and \(F\) for efficiency → <strong>Blinn-Phong</strong></p>
     </div>
@@ -323,6 +325,7 @@ b = intensity * (0.4 + 0.3 * n.z);</code></pre>
       \[ k_s = \max(0,\,\hat{N}\cdot\hat{H})^n, \quad n = 64 \]
       <p class="eq-label" style="margin-top:0.5em;">Full model (\(\sigma = 0.6\)):</p>
       \[ I = \underbrace{k_a + (1-k_a)\max(0,\hat{N}{\cdot}\hat{L})}_{\text{Lambert term}} + \sigma k_s \]
+      <p class="small">Shininess \(n\) controls highlight sharpness: \(n=10\) → matte paint, \(n=64\) → glossy plastic (ours), \(n=1000+\) → near-mirror. Higher \(n\) concentrates the lobe around the mirror reflection direction.</p>
     </div>
     <div>
       <pre><code class="language-cpp">// V points toward camera
@@ -405,7 +408,8 @@ b = diffuseIntensity*(0.4+0.3*n.z) + spec*0.6;</code></pre>
   <div class="two-col">
     <div>
       <p class="eq-label">Uniform point on unit sphere (Marsaglia 1972):</p>
-      <p class="small">Reject \((x_1, x_2) \in [-1,1)^2\) if \(s = x_1^2 + x_2^2 \geq 1\):</p>
+      <p class="small">Uniformly sample the unit disk (reject if outside), then project onto the sphere — avoids over-sampling the poles that naive spherical-coordinate sampling produces.</p>
+      <p class="small">Reject \((x_1, x_2)\) if \(s = x_1^2 + x_2^2 \geq 1\), then:</p>
       \[ f = 2\sqrt{1-s}, \quad \vec{u} = (x_1 f,\; x_2 f,\; 1 - 2s) \]
       <p class="eq-label" style="margin-top:0.5em;">Shadow factor (continuous penumbra):</p>
       \[ \text{sf} = \frac{\#\{\text{unblocked rays}\}}{N}, \quad N = 16 \]
@@ -413,10 +417,8 @@ b = diffuseIntensity*(0.4+0.3*n.z) + spec*0.6;</code></pre>
       \[ I = k_a + (1-k_a)\,(\hat{N}{\cdot}\hat{L}_c)\cdot\text{sf} \]
     </div>
     <div>
-      <p class="eq-label">Per-pixel LCG seed (stable noise):</p>
-      \[ \text{seed} = \lfloor(d_x{+}2)\cdot c_1\rfloor \oplus \lfloor(d_y{+}2)\cdot c_2\rfloor \oplus \lfloor(d_z{+}2)\cdot c_3\rfloor \]
-      <p class="small">\(c_1 = 73856093,\; c_2 = 19349663,\; c_3 = 83492791\)</p>
-      <p class="small" style="margin-top:0.4em;">Same ray direction → same seed → no flicker when navigating light positions.</p>
+      <p class="eq-label">Per-pixel deterministic seed:</p>
+      <p class="small">Hash the primary ray direction into a seed. Same pixel → same shadow ray offsets across frames → no temporal flicker when navigating light positions.</p>
       <pre style="margin-top:0.5em;"><code class="language-cpp">for (int i = 0; i &lt; N_SAMPLES; ++i) {
   Vec3 sample = light.pos
               + randomUnitVec(rng) * light.radius;
@@ -475,6 +477,7 @@ double sf = unblocked / N_SAMPLES;</code></pre>
 <section>
   <h2>Limits of Local Models: Path Notation</h2>
   <p class="small">Shirley's regular-expression notation characterises which light transport paths each algorithm handles. \(E\) = eye, \(L\) = light, \(D\) = diffuse, \(G\) = glossy, \(S\) = specular.</p>
+  <p class="small">Read a path left-to-right: camera (E), then a sequence of surface interactions, then light (L). \(S^*\) means zero or more specular bounces. \((D|G)\) means one diffuse or glossy hit. The expression captures exactly which physical light transport paths an algorithm handles — and which it misses entirely.</p>
   <table style="margin-top:0.6em;">
     <thead><tr><th>Algorithm</th><th>Paths handled</th><th>What is missed</th></tr></thead>
     <tbody>
@@ -646,6 +649,7 @@ return local*(1.0-k) + refl*k;</code></pre>
     G(\vec{x},\vec{x}')\; V(\vec{x},\vec{x}')\; dA'
   \]
   <p class="small">\(G(\vec{x},\vec{x}') = \cos\theta_i\cos\theta'_o\,/\,|\vec{x}-\vec{x}'|^2\) &nbsp;—&nbsp; geometry factor (differential form factor / \(\pi\))</p>
+  <p class="small">G bundles three physical factors: \(\cos\theta_i\) (foreshortening at the receiver), \(\cos\theta'_o\) (foreshortening at the source), and \(1/d^2\) (inverse-square falloff). \(V(\vec{x},\vec{x}')\) is 1 if the two points can see each other — implemented as a shadow ray test.</p>
   <div class="highlight-box" style="margin-top:0.5em;">
     <p class="small">\(L\) appears on <em>both sides</em> → <strong>Fredholm integral equation of the second kind</strong></p>
     \[ L = L_e + K \circ L \quad\Longrightarrow\quad L = (I-K)^{-1}\circ L_e = \sum_{n=0}^{\infty} K^n \circ L_e \]
@@ -699,6 +703,7 @@ return local*(1.0-k) + refl*k;</code></pre>
       <p class="small">Expected value unchanged; path terminated with correct probability.</p>
     </div>
     <div>
+      <p class="small"><strong>Throughput</strong> = product of all BRDF weights so far (starts at 1, multiplied by \(\rho\) at each bounce). <strong>lastSpecular</strong> prevents double-counting: when NEE explicitly samples the light at a diffuse hit, we suppress the direct emission at the <em>next</em> hit to avoid adding it twice.</p>
       <pre><code class="language-cpp">Color L = {0,0,0};
 Color throughput = {1,1,1};
 
@@ -767,7 +772,8 @@ double z = sqrt(max(0.0, 1.0 - u1));
      ═══════════════════════════════════════════════════════════ -->
 <section>
   <h2>Next Event Estimation (NEE)</h2>
-  <p class="small"><strong>Problem:</strong> pure BRDF sampling rarely hits small lights → high variance per sample → grainy image.</p>
+  <p class="small"><strong>Core idea:</strong> instead of hoping the random walk accidentally finds the light, shoot a dedicated shadow ray directly toward it at every diffuse bounce. The contribution is computed analytically rather than discovered by chance — dramatically reducing variance.</p>
+  <p class="small" style="margin-top:0.3em;"><strong>Why it works:</strong> the rendering equation contains a direct-lighting integral we can evaluate exactly. NEE evaluates it explicitly; the path continues for indirect light only.</p>
   <div class="two-col" style="margin-top:0.4em;">
     <div>
       <p class="eq-label">Direct lighting estimator (area form):</p>
@@ -1172,8 +1178,8 @@ Reveal.initialize({
     center: true,
     touch: true,
     loop: false,
-    transition: 'slide',
-    transitionSpeed: 'fast',
+    transition: 'none',
+    transitionSpeed: 'default',
 
     math: {
         mathjax: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
