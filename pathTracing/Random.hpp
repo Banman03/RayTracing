@@ -56,6 +56,19 @@ inline Ray::Vec3 reflect(const Ray::Vec3& d, const Ray::Vec3& n) {
     return d - n * (2.0 * d.dot(n));
 }
 
+// Uniform random direction on the unit sphere (Marsaglia 1972).
+// Used for sampling random points on light sphere surfaces for NEE.
+inline Ray::Vec3 uniformSphere(RNG& rng) {
+    double x1, x2, s;
+    do {
+        x1 = rng.next() * 2.0 - 1.0;
+        x2 = rng.next() * 2.0 - 1.0;
+        s  = x1 * x1 + x2 * x2;
+    } while (s >= 1.0);
+    double f = 2.0 * std::sqrt(1.0 - s);
+    return { x1 * f, x2 * f, 1.0 - 2.0 * s };
+}
+
 } // namespace PathTracing
 
 #endif // PT_RANDOM_HPP

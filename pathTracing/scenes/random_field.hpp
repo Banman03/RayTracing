@@ -49,10 +49,10 @@ inline SceneConfig randomField(int W, int H) {
 
     // Two emissive lights for nicer shadows.
     scene.addSphere(std::make_unique<Sphere>(
-        Ray::Vec3{-4, 5.5, 3.5}, 1.2,
+        Ray::Vec3{-4, 5.5, 3.5}, 1.5,
         Material::light({16.0, 12.0, 8.0})));
     scene.addSphere(std::make_unique<Sphere>(
-        Ray::Vec3{4.5, 5.5, 6.5}, 1.0,
+        Ray::Vec3{4.5, 5.5, 6.5}, 1.5,
         Material::light({8.0, 12.0, 16.0})));
 
     SceneConfig cfg(std::move(scene), Camera({0, 4, -5}, {0, 0, 4}, W, H));

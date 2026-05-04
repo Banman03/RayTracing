@@ -22,8 +22,8 @@ namespace pt = PathTracing;
 
 // Output settings — kept smaller than the rasterized ray tracer because
 // Monte Carlo path tracing requires many samples per pixel to converge.
-constexpr int    W           = 480;
-constexpr int    H           = 270;
+constexpr int    W           = 800;
+constexpr int    H           = 900;
 constexpr int    MAX_DEPTH   = 6;
 constexpr int    RR_START    = 3;
 constexpr int    MAX_SAMPLES = 4096;

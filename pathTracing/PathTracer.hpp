@@ -51,8 +51,9 @@ public:
         : _cfg(&cfg), _maxDepth(maxDepth), _rrStart(rrStart) {}
 
     Pixel::Color trace(Ray::Ray ray, RNG& rng) const {
-        Pixel::Color L          = {0.0, 0.0, 0.0};
-        Pixel::Color throughput = {1.0, 1.0, 1.0};
+        Pixel::Color L            = {0.0, 0.0, 0.0};
+        Pixel::Color throughput   = {1.0, 1.0, 1.0};
+        bool         lastSpecular = true;  // camera ray: always see emitters directly
 
         for (int depth = 0; depth < _maxDepth; ++depth) {
             auto hit = _cfg->scene.trace(ray);
@@ -63,11 +64,12 @@ public:
 
             const Material* m = hit->material;
 
-            // Step 3A — accumulate emission from the surface we just hit.
-            L = L + hadamard(throughput, m->emission);
+            // Add emission only on camera rays or after specular bounces.
+            // After diffuse bounces the light is already counted by NEE below.
+            if (lastSpecular)
+                L = L + hadamard(throughput, m->emission);
 
-            // Step 3B — Russian-Roulette absorption based on max-channel ρ.
-            // Always continue for the first few bounces to avoid dimming.
+            // Russian-Roulette absorption based on max-channel ρ.
             double p = std::max({m->albedo.r, m->albedo.g, m->albedo.b});
             p = std::clamp(p, 0.0, 0.95);
             if (depth >= _rrStart) {
@@ -75,29 +77,62 @@ public:
                 throughput = throughput * (1.0 / p);
             }
 
-            // Fold the surface reflectance into throughput. For both
-            // Lambertian (cosine-weighted) and mirror BRDFs the
-            // fr·cos(θ)/pdf factor equals 1, so only ρ remains.
+            // Fold albedo into throughput. After this line throughput includes
+            // this surface's reflectance, which is what sampleLight needs.
             throughput = hadamard(throughput, m->albedo);
 
-            // Sample the next direction.
             Ray::Vec3 dir;
-            switch (m->type) {
-                case BRDF::Specular:
-                    dir = reflect(ray.direction, hit->normal);
-                    break;
-                case BRDF::Diffuse:
-                default:
-                    dir = cosineHemisphere(hit->normal, rng);
-                    break;
+            if (m->type == BRDF::Specular) {
+                dir = reflect(ray.direction, hit->normal);
+                lastSpecular = true;
+            } else {
+                // NEE: explicitly sample each area light for direct illumination.
+                for (const Sphere* light : _cfg->scene.lights())
+                    sampleLight(*hit, light, throughput, rng, L);
+
+                dir = cosineHemisphere(hit->normal, rng);
+                lastSpecular = false;
             }
 
-            // Offset the new origin along the normal to dodge self-intersection.
-            Ray::Vec3 origin = hit->point + hit->normal * 1e-4;
-            ray = Ray::Ray(origin, dir);
+            ray = Ray::Ray(hit->point + hit->normal * 1e-4, dir);
         }
 
         return L;
+    }
+
+private:
+    // Direct-lighting estimator for one area light (spherical emitter).
+    // Samples a uniform random point on the light surface and computes the
+    // unoccluded contribution using the area-form rendering equation:
+    //   L_direct = fr * Le * cos(θ) * cos(θ') * A / dist²
+    // where fr = albedo/π (Lambertian) is already folded into `throughput`
+    // (albedo part) so we divide by π here.
+    void sampleLight(const HitRecord& hit, const Sphere* light,
+                     const Pixel::Color& throughput, RNG& rng,
+                     Pixel::Color& L) const
+    {
+        Ray::Vec3 lightPt = light->center + uniformSphere(rng) * light->radius;
+        Ray::Vec3 toLight = lightPt - hit.point;
+        double    dist    = toLight.norm();
+        if (dist < 1e-8) return;
+        Ray::Vec3 dir = toLight * (1.0 / dist);
+
+        double cosAtHit = hit.normal.dot(dir);
+        if (cosAtHit <= 0.0) return;  // light below surface horizon
+
+        // Outward normal at the sampled point on the light sphere.
+        Ray::Vec3 lightNormal = (lightPt - light->center) * (1.0 / light->radius);
+        double cosAtLight = lightNormal.dot(dir * -1.0);
+        if (cosAtLight <= 0.0) return;  // sampled the back face
+
+        // Visibility: any opaque surface between hit point and light sample?
+        Ray::Ray shadowRay(hit.point + hit.normal * 1e-4, dir);
+        auto blocker = _cfg->scene.trace(shadowRay);
+        if (blocker && blocker->t < dist - 1e-3) return;
+
+        double area   = 4.0 * M_PI * light->radius * light->radius;
+        double weight = cosAtHit * cosAtLight * area / (M_PI * dist * dist);
+        L = L + hadamard(throughput, light->material.emission) * weight;
     }
 };
 
