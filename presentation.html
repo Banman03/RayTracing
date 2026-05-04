@@ -233,11 +233,6 @@ tDelta[X] = voxelSize / |d.x|;
       <p class="eq-label">BRDF (constant):</p>
       \[ f_r = \frac{\rho}{\pi} \]
       <p class="small">The \(1/\pi\) normalises the BRDF so that \(\int f_r \cos\theta\, d\omega = \rho\) over the hemisphere — without it the surface could reflect more energy than it receives (energy non-conservation).</p>
-      <p class="eq-label" style="margin-top:0.5em;">Irradiance from Lambert's law:</p>
-      \[ E = \Phi_L \cos\theta_i = \Phi_L\,(\hat{N}\cdot\hat{L}) \]
-      <p class="eq-label" style="margin-top:0.5em;">Rendered intensity:</p>
-      \[ I = k_a + (1 - k_a)\max(0,\,\hat{N}\cdot\hat{L})\,v_\text{shadow} \]
-      <p class="small">\(k_a = 0.12\) (ambient), \(v_\text{shadow} \in \{0,1\}\)</p>
     </div>
     <div>
       <p class="eq-label">Shadow test:</p>
@@ -617,7 +612,6 @@ return local*(1.0-k) + refl*k;</code></pre>
     <div>
       <p class="small">Classic example: a white Cornell box with one red and one green wall. Adjacent white walls should pick up coloured light through multiple diffuse bounces.</p>
       <p class="small" style="margin-top:0.4em;">Whitted traces \(E[S^*](D|G)L\): after one diffuse hit, tracing stops. The red/green bounce cannot reach the white walls — <strong>the image is simply wrong</strong>.</p>
-      <p class="small" style="margin-top:0.4em;"><strong>Radiosity</strong> (Goral et al., 1984) handles \(ED^*L\) — all diffuse-to-diffuse paths — but cannot handle specular at all.</p>
     </div>
     <div>
       <div class="highlight-box">
@@ -972,7 +966,7 @@ display.setPixel(col, row,
   <div class="two-col">
     <div>
       <p class="small"><strong>Problem:</strong> path tracing at 1–4 spp is visibly noisy (as you'll see in our demo). Traditional denoising (bilateral filter, NL-means) smooths but blurs detail.</p>
-      <p class="small" style="margin-top:0.4em;"><strong>NVIDIA OptiX AI Denoiser (2017):</strong> CNN trained on HDR Monte Carlo renders. Takes noisy colour + optional albedo/normal G-buffer → clean image in a single pass. Replaces our running average.</p>
+      <p class="small" style="margin-top:0.4em;"><strong>NVIDIA OptiX AI Denoiser (2017):</strong> CNN trained on HDR Monte Carlo renders.</p>
       <p class="small" style="margin-top:0.4em;"><strong>DLSS 3.5 Ray Reconstruction (2023):</strong> joint denoising + temporal upscaling in one network. Rendered at 1080p with 1 spp → displayed at 4K with perceived quality of many spp.</p>
     </div>
     <div>
