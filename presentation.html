@@ -280,7 +280,7 @@ b = intensity * (0.4 + 0.3 * n.z);</code></pre>
 
 <!-- ═══════════════════════════════════════════════════════════
      SLIDE 9 - BLINN-PHONG: MICROFACET THEORY
-     ═══════════════════════════════════════════════════════════ -->
+     ═══════════════════════════════════════════════════════════
 <section>
   <h2>Blinn-Phong: Microfacet Motivation &nbsp;<span class="cite">Blinn, 1977</span></h2>
   <p class="small">Torrance-Sparrow model: surface = statistical distribution of tiny perfect mirrors (microfacets). Only facets with normal \(\hat{H}\) contribute to reflection toward \(\hat{V}\).</p>
@@ -299,7 +299,7 @@ b = intensity * (0.4 + 0.3 * n.z);</code></pre>
       <p class="small">Replace \(D\) with \((\hat{N}\cdot\hat{H})^n\); drop \(G\) and \(F\) for efficiency → <strong>Blinn-Phong</strong></p>
     </div>
   </div>
-</section>
+</section> -->
 
 <!-- ═══════════════════════════════════════════════════════════
      SLIDE 10 - BLINN-PHONG MODEL
@@ -495,9 +495,6 @@ double sf = unblocked / N_SAMPLES;</code></pre>
       <p class="small">\(S\) = recursive specular reflection, \(T\) = refraction</p>
       <p class="eq-label" style="margin-top:0.5em;">Reflection direction:</p>
       \[ \vec{R} = \vec{D} - 2(\vec{D}{\cdot}\hat{N})\hat{N} \]
-      <p class="eq-label" style="margin-top:0.5em;">Refraction (Snell's law):</p>
-      \[ \vec{P} = k_r(2q + \vec{V}) - \hat{N}, \quad k_r = \frac{1}{\sqrt{k_n^2|q|^2 - |\vec{V}+\hat{N}|^2}} \]
-      <p class="small">\(q = \vec{V}/|V{\cdot}N|\), \(k_n\) = refractive index ratio</p>
     </div>
     <div>
       <p class="eq-label">Blending (our implementation, no refraction):</p>
