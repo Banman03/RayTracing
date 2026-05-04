@@ -222,12 +222,16 @@ tDelta[X] = voxelSize / |d.x|;
      ═══════════════════════════════════════════════════════════ -->
 <section>
   <h2>Lambertian Diffuse &nbsp;<span class="cite">Lambert, 1760</span></h2>
-  <p class="small"><strong>Physical premise:</strong> perfectly matte surface - incident energy scattered equally in all directions over the hemisphere.</p>
+  <p class="small"><strong>Physical premise:</strong> perfectly matte surface — incident energy scattered equally in all
+    directions over the hemisphere.</p>
   <div class="two-col" style="margin-top:0.5em;">
     <div>
       <p class="eq-label">BRDF (constant):</p>
       \[ f_r = \frac{\rho}{\pi} \]
-      <p class="small">The \(1/\pi\) normalises the BRDF so that \(\int f_r \cos\theta\, d\omega = \rho\) over the hemisphere - without it the surface could reflect more energy than it receives (energy non-conservation).</p>
+
+      <p class="eq-label" style="margin-top:0.5em;">Rendered intensity:</p>
+      \[ I = k_a + (1 - k_a)\max(0,\,\hat{N}\cdot\hat{L})\,v_\text{shadow} \]
+      <p class="small">\(k_a = 0.12\) (ambient), \(v_\text{shadow} \in \{0,1\}\)</p>
     </div>
     <div>
       <p class="eq-label">Shadow test:</p>

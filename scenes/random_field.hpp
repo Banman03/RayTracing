@@ -10,7 +10,7 @@ namespace Scenes {
     inline SceneConfig randomField(int W, int H) {
         Scene::Scene scene(W, H, {-7,-4,-1}, {7,3,10}, 28,14,22);
 
-        uint32_t rng = 42;
+        uint32_t rng = 10;
         auto next = [&]() -> double {
             rng = rng * 1664525u + 1013904223u;
             return (double)(rng >> 16) / 65535.0;  // [0, 1)

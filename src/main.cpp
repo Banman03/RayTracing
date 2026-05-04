@@ -100,7 +100,7 @@ int main(int argc, char* argv[]) {
 
         char title[160];
         std::snprintf(title, sizeof(title),
-            "RayTracing — %s [%s]  [%d/%d]  light (%.1f, %.1f, %.1f)  ← → to navigate",
+            "RayTracing — %s [%s]  [%d/%d]  light (%.1f, %.1f, %.1f)  arrows to navigate",
             sceneName.c_str(), algoName.c_str(), idx + 1, NUM_LIGHTS,
             lightPos.x, lightPos.y, lightPos.z);
         display.setTitle(title);
