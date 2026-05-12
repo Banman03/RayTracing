@@ -198,8 +198,8 @@ tDelta[X] = voxelSize / |d.x|;
     <li><strong>Lighting</strong> - determining how much and from where light reaches the surface (shadows, inter-reflection)</li>
   </ul>
   <div class="highlight-box" style="margin-top:0.7em;">
-    Our shading models (Lambert, Blinn-Phong) are <strong>local</strong>: they query a single point light via one shadow ray.
-    Global effects require more - recursive tracing (Whitted) or Monte Carlo integration (path tracing).
+    Our shading models (Lambert, Blinn-Phong) are local: they query a single point light via one shadow ray.
+    Global effects require more: recursive tracing (Whitted) or Monte Carlo integration (path tracing), or something even more advanced.
   </div>
   <table style="margin-top:0.8em;">
     <thead><tr><th>Model</th><th>Direct diffuse</th><th>Specular</th><th>Soft shadows</th><th>Interreflection</th></tr></thead>
@@ -408,7 +408,7 @@ b = diffuseIntensity*(0.4+0.3*n.z) + spec*0.6;</code></pre>
     </div>
     <div>
       <p class="eq-label">Per-pixel deterministic seed:</p>
-      <p class="small">Hash the primary ray direction into a seed. Same pixel → same shadow ray offsets across frames → no temporal flicker when navigating light positions.</p>
+      <p class="small">Hash the primary ray direction into a seed. This means that there is no temporal flicker when navigating light positions.</p>
       <pre style="margin-top:0.5em;"><code class="language-cpp">for (int i = 0; i &lt; N_SAMPLES; ++i) {
   Vec3 sample = light.pos
               + randomUnitVec(rng) * light.radius;
