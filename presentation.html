@@ -198,8 +198,8 @@ tDelta[X] = voxelSize / |d.x|;
     <li><strong>Lighting</strong> - determining how much and from where light reaches the surface (shadows, inter-reflection)</li>
   </ul>
   <div class="highlight-box" style="margin-top:0.7em;">
-    Our shading models (Lambert, Blinn-Phong) are <strong>local</strong>: they query a single point light via one shadow ray.
-    Global effects require more - recursive tracing (Whitted) or Monte Carlo integration (path tracing).
+    Our shading models (Lambert, Blinn-Phong) are local: they query a single point light via one shadow ray.
+    Global effects require more: recursive tracing (Whitted) or Monte Carlo integration (path tracing), or something even more advanced.
   </div>
   <table style="margin-top:0.8em;">
     <thead><tr><th>Model</th><th>Direct diffuse</th><th>Specular</th><th>Soft shadows</th><th>Interreflection</th></tr></thead>
