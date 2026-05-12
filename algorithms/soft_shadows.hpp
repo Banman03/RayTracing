@@ -19,7 +19,7 @@ namespace Algorithms::SoftShadows {
 //
 // The RNG is per-pixel-seeded so the noise pattern is stable across frames
 // (no flickering when navigating between light positions).
-constexpr int N_SAMPLES = 16;
+constexpr int N_SAMPLES = 256;
 
 // Uniform random point on the unit sphere (Marsaglia 1972 — rejection on
 // the unit disk, then lifted to 3D). Two uniforms in, unit vector out.
