@@ -467,7 +467,7 @@ double sf = unblocked / N_SAMPLES;</code></pre>
 <section>
   <h2>Limits of Local Models: Path Notation</h2>
   <p class="small">Shirley's regular-expression notation characterises which light transport paths each algorithm handles. \(E\) = eye, \(L\) = light, \(D\) = diffuse, \(G\) = glossy, \(S\) = specular.</p>
-  <p class="small">Read a path left-to-right: camera (E), then a sequence of surface interactions, then light (L). \(S^*\) means zero or more specular bounces. \((D|G)\) means one diffuse or glossy hit. The expression captures exactly which physical light transport paths an algorithm handles - and which it misses entirely.</p>
+  <p class="small">Read a path left-to-right: camera (E), then a sequence of surface interactions, then light (L). \(S^*\) means zero or more specular bounces. \((D|G)\) means one diffuse or glossy hit.</p>
   <table style="margin-top:0.6em;">
     <thead><tr><th>Algorithm</th><th>Paths handled</th><th>What is missed</th></tr></thead>
     <tbody>
@@ -478,7 +478,7 @@ double sf = unblocked / N_SAMPLES;</code></pre>
     </tbody>
   </table>
   <div class="highlight-box" style="margin-top:0.7em;">
-    Any algorithm that ignores whole classes of paths will produce systematically incorrect images - not just approximations, but <em>wrong answers</em> for scenes where those paths dominate (e.g., caustics, colour bleeding).
+    Any algorithm that ignores whole classes of paths will produce incorrect images. They will produce wrong answers for scenes where those paths dominate (e.g., caustics, colour bleeding).
   </div>
 </section>
 
