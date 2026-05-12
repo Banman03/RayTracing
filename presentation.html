@@ -490,6 +490,8 @@ double sf = unblocked / N_SAMPLES;</code></pre>
   <p class="small">Extends Phong shading with recursive specular reflection and refraction. First algorithm to correctly handle mirror inter-reflections.</p>
   <div class="two-col" style="margin-top:0.4em;">
     <div>
+      <p class="eq-label">Illumination model (we implement a simplified version of this):</p>
+      \[ I = I_a + k_d\sum_j(\hat{N}{\cdot}\hat{L}_j) + k_s S + k_t T \]
       <p class="small">\(S\) = recursive specular reflection, \(T\) = refraction</p>
       <p class="eq-label" style="margin-top:0.5em;">Reflection direction:</p>
       \[ \vec{R} = \vec{D} - 2(\vec{D}{\cdot}\hat{N})\hat{N} \]
